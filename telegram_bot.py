@@ -3,7 +3,6 @@ import time
 import json
 import requests
 import pytz
-from bs4 import BeautifulSoup
 from datetime import datetime, timedelta
 
 # ─────────────────────────────────────────────
@@ -11,106 +10,85 @@ from datetime import datetime, timedelta
 # ─────────────────────────────────────────────
 TELEGRAM_TOKEN   = os.environ.get("TELEGRAM_TOKEN")
 TELEGRAM_CHAT_ID = os.environ.get("TELEGRAM_CHAT_ID")
-
 ARGENTINA_TZ     = pytz.timezone("America/Argentina/Buenos_Aires")
 
-ARCHIVO_PUBLICADOS  = "telegram_publicados.json"
-ARCHIVO_ESTADO      = "telegram_estado.json"
-
-INTERVALO_PREMIER   = 2   # minutos
-INTERVALO_FIP       = 5   # minutos
-HORA_RESUMEN_MANANA = 22  # 22hs Argentina = resumen del día siguiente
-HORA_ORDEN_DIA      = 7   # 7hs Argentina = orden del día
-
-LINK_WEB = "🌐 www.padelargentina.com.ar"
+INTERVALO_MIN      = 2
+ARCHIVO_PUBLICADOS = "tg_publicados.json"
+ARCHIVO_ESTADO     = "tg_estado.json"
+LINK_WEB           = "🌐 www.padelargentina.com.ar"
 
 TORNEOS_PREMIER = [
     {
-        "nombre":   "Premier Padel P1 Valencia",
-        "url":      "https://www.padelfip.com/es/events/valencia-p1-2026/",
-        "emoji":    "🏟️",
-        "ciudad":   "Valencia",
-        "pais":     "España",
-        "bandera":  "🇪🇸",
-        "tz_local": "Europe/Madrid",
-        "tz_offset": "+2hs",
-        "categoria": "P1",
+        "nombre":    "Premier Padel P1 Valencia",
+        "ciudad":    "Valencia",
+        "bandera":   "🇪🇸",
+        "tz_local":  "Europe/Madrid",
+        "emoji":     "🏟️",
+        "ss_id_men": 35317,
+        "ss_id_women": 35318,
     },
 ]
 
 TORNEOS_FIP = [
     {
-        "nombre":   "FIP Bronze Eslovenia",
-        "url":      "https://www.padelfip.com/es/events/fip-bronze-slovenia-2026/",
-        "emoji":    "🎾",
-        "ciudad":   "Ljubljana",
-        "pais":     "Eslovenia",
-        "bandera":  "🇸🇮",
-        "tz_local": "Europe/Ljubljana",
-        "tz_offset": "+5hs",
-        "categoria": "FIP Bronze",
+        "nombre":  "FIP Bronze Eslovenia",
+        "ciudad":  "Ljubljana",
+        "bandera": "🇸🇮",
+        "emoji":   "🎾",
+        "url_fip": "https://www.padelfip.com/es/events/fip-bronze-slovenia-2026/",
     },
 ]
 
 ARGENTINOS = {
-    "Agustin Tapia":              "🇦🇷 Agustín Tapia",
-    "Federico Chingotto":         "🇦🇷 Federico Chingotto",
-    "Franco Stupaczuk":           "🇦🇷 Franco Stupaczuk",
-    "Leandro Augsburger":         "🇦🇷 Leandro Augsburger",
-    "Martin Di Nenno":            "🇦🇷 Martín Di Nenno",
-    "Gonzalo Alfonso":            "🇦🇷 Gonzalo Alfonso",
-    "Leonel Aguirre":             "🇦🇷 Leonel Aguirre",
-    "Juan Tello":                 "🇦🇷 Juan Tello",
-    "Maximiliano Arce":           "🇦🇷 Maxi Arce",
-    "Luciano Capra":              "🇦🇷 Luciano Capra",
-    "Ignacio Piotto":             "🇦🇷 Ignacio Piotto",
-    "Juan Cruz Belluati":         "🇦🇷 Juan Cruz Belluati",
-    "Juan Ignacio Rubini":        "🇦🇷 Juan I. Rubini",
-    "Federico Mourino":           "🇦🇷 Federico Mouriño",
-    "Valentino Libaak":           "🇦🇷 Valentino Libaak",
-    "Alex Chozas":                "🇦🇷 Alex Chozas",
-    "Carlos Gutierrez":           "🇦🇷 Carlos Gutiérrez",
-    "Maximiliano Sanchez Blasco": "🇦🇷 Maxi Sánchez Blasco",
-    "Agustin Torre":              "🇦🇷 Agustín Torre",
-    "Juan Cruz Forastello":       "🇦🇷 Juan Cruz Forastello",
-    "Juan Ignacio De Pascual":    "🇦🇷 Juan I. De Pascual",
-    "Maximiliano Sanchez Aguero": "🇦🇷 Maxi Sánchez Agüero",
-    "Delfina Brea":               "🇦🇷 Delfina Brea",
-    "Ariana Sanchez":             "🇦🇷 Ariana Sánchez",
-    "Sofia Araujo":               "🇦🇷 Sofía Araújo",
+    "Agustin Tapia":              "Agustín Tapia",
+    "Federico Chingotto":         "Federico Chingotto",
+    "Franco Stupaczuk":           "Franco Stupaczuk",
+    "Leandro Augsburger":         "Leandro Augsburger",
+    "Martin Di Nenno":            "Martín Di Nenno",
+    "Gonzalo Alfonso":            "Gonzalo Alfonso",
+    "Leonel Aguirre":             "Leonel Aguirre",
+    "Juan Tello":                 "Juan Tello",
+    "Maximiliano Arce":           "Maxi Arce",
+    "Luciano Capra":              "Luciano Capra",
+    "Ignacio Piotto":             "Ignacio Piotto",
+    "Juan Cruz Belluati":         "Juan Cruz Belluati",
+    "Juan Ignacio Rubini":        "Juan I. Rubini",
+    "Federico Mourino":           "Federico Mouriño",
+    "Valentino Libaak":           "Valentino Libaak",
+    "Alex Chozas":                "Alex Chozas",
+    "Carlos Gutierrez":           "Carlos Gutiérrez",
+    "Maximiliano Sanchez Blasco": "Maxi Sánchez Blasco",
+    "Agustin Torre":              "Agustín Torre",
+    "Juan Cruz Forastello":       "Juan Cruz Forastello",
+    "Juan Ignacio De Pascual":    "Juan I. De Pascual",
+    "Maximiliano Sanchez Aguero": "Maxi Sánchez Agüero",
+    "Delfina Brea":               "Delfina Brea",
+    "Ariana Sanchez":             "Ariana Sánchez",
+    "Sofia Araujo":               "Sofía Araújo",
 }
 
 # ─────────────────────────────────────────────
 # HELPERS
 # ─────────────────────────────────────────────
 
-def hora_argentina():
+def hora_arg():
     return datetime.now(ARGENTINA_TZ)
-
-def convertir_hora_arg(hora_local_str, tz_local_str):
-    """Convierte hora local del torneo a hora argentina"""
-    try:
-        tz_local = pytz.timezone(tz_local_str)
-        hoy = datetime.now(tz_local).date()
-        h, m = map(int, hora_local_str.split(":"))
-        dt_local = tz_local.localize(datetime(hoy.year, hoy.month, hoy.day, h, m))
-        dt_arg = dt_local.astimezone(ARGENTINA_TZ)
-        return dt_arg.strftime("%H:%M")
-    except:
-        return hora_local_str
-
-def nombre_display(nombre):
-    for clave, display in ARGENTINOS.items():
-        if clave.lower() in nombre.lower():
-            return display
-    return nombre
 
 def es_argentino(nombre):
     return any(k.lower() in nombre.lower() for k in ARGENTINOS)
 
+def nombre_display(nombre):
+    for k, v in ARGENTINOS.items():
+        if k.lower() in nombre.lower():
+            return f"🇦🇷 {v}"
+    return nombre
+
+def apellido(nombre):
+    return nombre.strip().split()[-1] if nombre.strip() else nombre
+
 def cargar_json(archivo):
     if os.path.exists(archivo):
-        with open(archivo, "r") as f:
+        with open(archivo) as f:
             return json.load(f)
     return {}
 
@@ -122,496 +100,376 @@ def cargar_publicados():
     d = cargar_json(ARCHIVO_PUBLICADOS)
     return set(d.get("ids", []))
 
-def guardar_publicado(id_msg):
+def guardar_publicado(pid):
     d = cargar_json(ARCHIVO_PUBLICADOS)
     ids = set(d.get("ids", []))
-    ids.add(id_msg)
+    ids.add(pid)
     guardar_json(ARCHIVO_PUBLICADOS, {"ids": list(ids)})
 
+def ya_hecho_hoy(tarea):
+    estado = cargar_json(ARCHIVO_ESTADO)
+    return estado.get(tarea) == hora_arg().strftime("%Y-%m-%d")
+
+def marcar_hecho_hoy(tarea):
+    estado = cargar_json(ARCHIVO_ESTADO)
+    estado[tarea] = hora_arg().strftime("%Y-%m-%d")
+    guardar_json(ARCHIVO_ESTADO, estado)
+
 # ─────────────────────────────────────────────
-# ENVÍO TELEGRAM
+# TELEGRAM
 # ─────────────────────────────────────────────
 
-def enviar_mensaje(texto, parse_mode="HTML"):
+def enviar(texto):
     url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
-    payload = {
-        "chat_id":    TELEGRAM_CHAT_ID,
-        "text":       texto,
-        "parse_mode": parse_mode,
-    }
     try:
-        r = requests.post(url, json=payload, timeout=15)
-        if r.status_code == 200:
-            print(f"✅ Telegram: {texto[:60]}...")
-            return True
-        else:
-            print(f"❌ Telegram error {r.status_code}: {r.text[:100]}")
-            return False
+        r = requests.post(url, json={
+            "chat_id":    TELEGRAM_CHAT_ID,
+            "text":       texto,
+            "parse_mode": "HTML",
+        }, timeout=15)
+        ok = r.status_code == 200
+        print(f"{'✅' if ok else '❌'} TG: {texto[:60]}...")
+        return ok
     except Exception as e:
-        print(f"❌ Telegram excepción: {e}")
+        print(f"❌ TG error: {e}")
         return False
 
 # ─────────────────────────────────────────────
-# SCRAPING
+# SOFASCORE API
 # ─────────────────────────────────────────────
 
-def fetch(url):
-    headers = {"User-Agent": "Mozilla/5.0"}
+SS_HEADERS = {"User-Agent": "Mozilla/5.0", "Accept": "application/json"}
+
+def ss_get(path):
     try:
-        r = requests.get(url, headers=headers, timeout=15)
-        return BeautifulSoup(r.text, "html.parser")
+        r = requests.get(f"https://api.sofascore.com/api/v1{path}",
+                         headers=SS_HEADERS, timeout=15)
+        if r.status_code == 200:
+            return r.json()
     except Exception as e:
-        print(f"[ERROR] fetch {url}: {e}")
-        return None
+        print(f"[SS] {path}: {e}")
+    return None
 
-def obtener_orden_juego(torneo):
-    """Scrapea el orden de juego del torneo desde padelfip.com"""
-    soup = fetch(torneo["url"])
-    if not soup:
+def partidos_finalizados_hoy(ss_id):
+    data = ss_get(f"/unique-tournament/{ss_id}/events/last/0")
+    if not data:
         return []
-    partidos = []
-    texto = soup.get_text()
-    lineas = [l.strip() for l in texto.split("\n") if l.strip()]
-    for i, linea in enumerate(lineas):
-        if any(h in linea for h in ["10:30", "10.30", "9:00", "9.00", "12:00", "14:00", "16:00", "18:00", "20:00"]):
-            bloque = " ".join(lineas[i:i+6])
-            partidos.append(bloque[:300])
-    return partidos
+    hoy = hora_arg().date()
+    result = []
+    for p in data.get("events", []):
+        if p.get("status", {}).get("type") != "finished":
+            continue
+        ts = p.get("startTimestamp", 0)
+        if datetime.fromtimestamp(ts, tz=ARGENTINA_TZ).date() == hoy:
+            result.append(p)
+    return result
 
-def obtener_cuadro(torneo, tipo="principal"):
-    """Scrapea el cuadro del torneo"""
-    soup = fetch(torneo["url"])
-    if not soup:
+def partidos_proximos_hoy(ss_id):
+    data = ss_get(f"/unique-tournament/{ss_id}/events/next/0")
+    if not data:
         return []
-    jugadores = []
-    for img in soup.find_all("img", {"title": "flag"}):
-        siguiente = img.find_next_sibling(string=True)
-        if siguiente and len(siguiente.strip()) > 3:
-            jugadores.append(siguiente.strip())
-    return jugadores
+    hoy = hora_arg().date()
+    return [
+        p for p in data.get("events", [])
+        if datetime.fromtimestamp(p.get("startTimestamp", 0),
+                                   tz=ARGENTINA_TZ).date() == hoy
+    ]
 
-def obtener_noticias_fip():
-    soup = fetch("https://www.padelfip.com/es/noticias/")
-    if not soup:
+def orden_dia_manana(ss_id, tz_local):
+    data = ss_get(f"/unique-tournament/{ss_id}/events/next/0")
+    if not data:
+        return {}
+    manana = (hora_arg() + timedelta(days=1)).date()
+    tz     = pytz.timezone(tz_local)
+    pistas = {}
+
+    for p in data.get("events", []):
+        ts = p.get("startTimestamp", 0)
+        dt_local = datetime.fromtimestamp(ts, tz=tz)
+        dt_arg   = datetime.fromtimestamp(ts, tz=ARGENTINA_TZ)
+        if dt_local.date() != manana:
+            continue
+
+        pista = p.get("venue", {}).get("name") or "Pista"
+        home  = p.get("homeTeam", {})
+        away  = p.get("awayTeam", {})
+
+        if pista not in pistas:
+            pistas[pista] = []
+        pistas[pista].append({
+            "hora_arg":   dt_arg.strftime("%H:%M"),
+            "hora_local": dt_local.strftime("%H:%M"),
+            "j1": home.get("name", ""),
+            "j2": home.get("subTeamName", "") or "",
+            "j3": away.get("name", ""),
+            "j4": away.get("subTeamName", "") or "",
+        })
+
+    for pista in pistas:
+        pistas[pista].sort(key=lambda x: x["hora_arg"])
+    return pistas
+
+def cuadros_ss(ss_id):
+    data = ss_get(f"/unique-tournament/{ss_id}/events/next/0")
+    if not data:
         return []
-    noticias = []
-    vistos = set()
-    for a in soup.find_all("a", href=True):
-        href  = a.get("href", "")
-        texto = a.get_text(strip=True)
-        if "/2026/" in href and len(texto) > 25 and href not in vistos:
-            vistos.add(href)
-            noticias.append({"titulo": texto, "url": href})
-    return noticias
+    parejas = []
+    for p in data.get("events", []):
+        home = p.get("homeTeam", {})
+        away = p.get("awayTeam", {})
+        j1 = home.get("name", "")
+        j3 = away.get("name", "")
+        j2 = home.get("subTeamName", "") or ""
+        j4 = away.get("subTeamName", "") or ""
+        if j1 and j3:
+            parejas.append((j1, j2, j3, j4))
+    return parejas
+
+def parsear(p):
+    home  = p.get("homeTeam", {})
+    away  = p.get("awayTeam", {})
+    hs    = p.get("homeScore", {})
+    as_   = p.get("awayScore", {})
+    j1, j2 = home.get("name", ""), home.get("subTeamName", "") or ""
+    j3, j4 = away.get("name", ""), away.get("subTeamName", "") or ""
+
+    sets = []
+    for i in range(1, 6):
+        sh = hs.get(f"period{i}")
+        sa = as_.get(f"period{i}")
+        if sh is not None and sa is not None:
+            sets.append(f"{sh}-{sa}")
+    marcador = " / ".join(sets) if sets else "—"
+
+    winner = p.get("winnerCode", 0)
+    if winner == 1:
+        gan, per = [j1, j2], [j3, j4]
+    else:
+        gan, per = [j3, j4], [j1, j2]
+
+    tm = p.get("time", {}).get("played")
+    tiempo = f"{tm//60}h {tm%60}min" if tm else None
+
+    return {
+        "id":        str(p.get("id", "")),
+        "ganadores": gan,
+        "perdedores": per,
+        "marcador":  marcador,
+        "ronda":     p.get("roundInfo", {}).get("name", ""),
+        "tiempo":    tiempo,
+    }
 
 # ─────────────────────────────────────────────
-# MENSAJES FORMATEADOS
+# MENSAJES TELEGRAM
 # ─────────────────────────────────────────────
 
-def msg_cuadro_qualifying(torneo, genero="Masculino"):
+def msg_cuadros(torneo, genero, parejas_q, parejas_p):
     emoji_gen = "👨" if genero == "Masculino" else "👩"
-    soup = fetch(torneo["url"])
-    if not soup:
-        return None
-
-    jugadores = obtener_cuadro(torneo)
-    if not jugadores:
-        return None
-
-    # Tomar primeros 32 para qualifying
-    cuadro = jugadores[:32]
-    lineas_cuadro = ""
-    for i in range(0, min(len(cuadro), 16), 2):
-        j1 = nombre_display(cuadro[i])   if i < len(cuadro) else "—"
-        j2 = nombre_display(cuadro[i+1]) if i+1 < len(cuadro) else "—"
-        lineas_cuadro += f"  {j1} vs {j2}\n"
-
-    msg = (
-        f"📋 <b>CUADRO QUALIFYING {genero.upper()}</b> {emoji_gen}\n"
-        f"{torneo['emoji']} <b>{torneo['nombre'].upper()}</b>\n"
-        f"📍 {torneo['ciudad']} {torneo['bandera']}\n\n"
-        f"{lineas_cuadro}\n"
-        f"{LINK_WEB}"
-    )
-    return msg
-
-def msg_cuadro_principal(torneo, genero="Masculino"):
-    emoji_gen = "👨" if genero == "Masculino" else "👩"
-    soup = fetch(torneo["url"])
-    if not soup:
-        return None
-
-    jugadores = obtener_cuadro(torneo)
-    if not jugadores:
-        return None
-
-    cuadro = jugadores[32:80] if len(jugadores) > 32 else jugadores
-    lineas_cuadro = ""
-    for i in range(0, min(len(cuadro), 16), 2):
-        j1 = nombre_display(cuadro[i])   if i < len(cuadro) else "—"
-        j2 = nombre_display(cuadro[i+1]) if i+1 < len(cuadro) else "—"
-        lineas_cuadro += f"  {j1} vs {j2}\n"
-
-    msg = (
-        f"🏆 <b>CUADRO PRINCIPAL {genero.upper()}</b> {emoji_gen}\n"
-        f"{torneo['emoji']} <b>{torneo['nombre'].upper()}</b>\n"
-        f"📍 {torneo['ciudad']} {torneo['bandera']}\n\n"
-        f"{lineas_cuadro}\n"
-        f"{LINK_WEB}"
-    )
-    return msg
-
-def msg_orden_dia(torneo, partidos_dia):
-    """Mensaje de inicio del día con todos los partidos por pista"""
-    ahora = hora_argentina()
-    fecha = ahora.strftime("%d/%m/%Y")
-
-    lineas = []
-    lineas.append(f"☀️ <b>ORDEN DE JUEGO — {fecha}</b>")
-    lineas.append(f"{torneo['emoji']} <b>{torneo['nombre'].upper()}</b>")
-    lineas.append(f"📍 {torneo['ciudad']} {torneo['bandera']}")
-    lineas.append("")
-
-    for pista, partidos in partidos_dia.items():
-        lineas.append(f"🎾 <b>{pista}</b>")
-        for p in partidos:
-            hora_arg = convertir_hora_arg(p["hora_local"], torneo["tz_local"])
-            lineas.append(
-                f"  🇦🇷⏰ {hora_arg}hs "
-                f"({torneo['bandera']} {p['hora_local']}hs)\n"
-                f"  {nombre_display(p['j1'])} / {nombre_display(p['j2'])}\n"
-                f"  vs\n"
-                f"  {nombre_display(p['j3'])} / {nombre_display(p['j4'])}"
-            )
-        lineas.append("")
-
-    lineas.append(LINK_WEB)
-    return "\n".join(lineas)
-
-def msg_resultado_premier(torneo, ganadores, perdedores, sets,
-                           tiempo, ronda_actual, ronda_siguiente,
-                           proximos_rivales):
-    """Resultado completo Premier Padel con actualización por set"""
-    arg_gana = any(es_argentino(j) for j in ganadores)
-
-    g1 = nombre_display(ganadores[0])
-    g2 = nombre_display(ganadores[1])
-    p1 = nombre_display(perdedores[0])
-    p2 = nombre_display(perdedores[1])
-
-    cabecera = "🇦🇷⚡ <b>VICTORIA ARGENTINA</b>" if arg_gana else "🎾 <b>RESULTADO</b>"
-
     lineas = [
-        cabecera,
-        f"{torneo['emoji']} <b>{torneo['nombre'].upper()}</b> | {ronda_actual.upper()}",
+        f"📋 <b>CUADROS {genero.upper()} {emoji_gen}</b>",
+        f"{torneo['emoji']} <b>{torneo['nombre'].upper()}</b>",
         f"📍 {torneo['ciudad']} {torneo['bandera']}",
         "",
-        f"✅ {g1} / {g2}",
-        f"❌ {p1} / {p2}",
-        f"🎯 {sets}",
+        "🔹 <b>QUALIFYING</b>",
+    ]
+    for j1, j2, j3, j4 in parejas_q[:6]:
+        lineas.append(f"  {nombre_display(j1)}/{nombre_display(j2)} vs {nombre_display(j3)}/{nombre_display(j4)}")
+    lineas += ["", "🔸 <b>CUADRO PRINCIPAL</b>"]
+    for j1, j2, j3, j4 in parejas_p[:8]:
+        lineas.append(f"  {nombre_display(j1)}/{nombre_display(j2)} vs {nombre_display(j3)}/{nombre_display(j4)}")
+    lineas += ["", LINK_WEB]
+    return "\n".join(lineas)
+
+def msg_orden_dia(torneo, pistas):
+    manana = (hora_arg() + timedelta(days=1)).strftime("%d/%m/%Y")
+    lineas = [
+        f"🗓️ <b>ORDEN DE JUEGO — {manana}</b>",
+        f"{torneo['emoji']} <b>{torneo['nombre'].upper()}</b>",
+        f"📍 {torneo['ciudad']} {torneo['bandera']}",
+        "",
+    ]
+    for pista, partidos in pistas.items():
+        lineas.append(f"🎾 <b>{pista}</b>")
+        for p in partidos:
+            j1 = nombre_display(p["j1"])
+            j3 = nombre_display(p["j3"])
+            lineas.append(
+                f"  🇦🇷⏰ {p['hora_arg']}hs "
+                f"({torneo['bandera']} {p['hora_local']}hs)\n"
+                f"  {j1} / {nombre_display(p['j2'])} vs {j3} / {nombre_display(p['j4'])}"
+            )
+        lineas.append("")
+    lineas += ["¡Nos vemos mañana! 🎾🇦🇷", "", LINK_WEB]
+    return "\n".join(lineas)
+
+def msg_resultado_premier(torneo, gan, per, marcador, tiempo, ronda):
+    arg_gana = any(es_argentino(j) for j in gan)
+    cab = "🇦🇷⚡ <b>VICTORIA ARGENTINA</b>" if arg_gana else "🎾 <b>RESULTADO</b>"
+    lineas = [
+        cab,
+        f"{torneo['emoji']} <b>{torneo['nombre'].upper()}</b> | {ronda.upper()}",
+        f"📍 {torneo['ciudad']} {torneo['bandera']}",
+        "",
+        f"✅ {nombre_display(gan[0])} / {nombre_display(gan[1])}",
+        f"❌ {nombre_display(per[0])} / {nombre_display(per[1])}",
+        f"🎯 {marcador}",
     ]
     if tiempo:
         lineas.append(f"⏱️ {tiempo}")
-    lineas.append("")
-    if ronda_siguiente:
-        lineas.append(f"➡️ Avanzan a <b>{ronda_siguiente}</b>")
-    if proximos_rivales:
-        lineas.append(f"🆚 Próximos rivales: {proximos_rivales}")
-    lineas.append("")
-    lineas.append(LINK_WEB)
-
+    lineas += ["", LINK_WEB]
     return "\n".join(lineas)
 
-def msg_resultado_set(torneo, j1, j2, j3, j4, sets_hasta_ahora, ronda):
-    """Actualización parcial tras finalizar un set"""
-    p1 = nombre_display(j1)
-    p2 = nombre_display(j2)
-    p3 = nombre_display(j3)
-    p4 = nombre_display(j4)
-
-    return (
-        f"📊 <b>PARCIAL — SET FINALIZADO</b>\n"
-        f"{torneo['emoji']} {torneo['nombre']} | {ronda}\n\n"
-        f"  {p1} / {p2}\n"
-        f"  vs\n"
-        f"  {p3} / {p4}\n\n"
-        f"🎯 Parcial: {sets_hasta_ahora}\n\n"
-        f"{LINK_WEB}"
-    )
-
-def msg_resultado_fip(torneo, ganadores, perdedores, marcador,
-                      ronda_actual, ronda_siguiente, arg_gana):
-    g1 = nombre_display(ganadores[0])
-    g2 = nombre_display(ganadores[1])
-    p1 = nombre_display(perdedores[0])
-    p2 = nombre_display(perdedores[1])
-
-    partes = torneo["nombre"].split()
-    lugar  = partes[-1]
-
-    if arg_gana:
-        cabecera = f"🎾🇦🇷 <b>VICTORIA ARGENTINA:</b>"
-    else:
-        cabecera = f"🎾🇦🇷 <b>Derrota argentina en el FIP de {lugar}</b>"
-
+def msg_resultado_fip(torneo, gan, per, marcador, ronda, arg_gana):
+    lugar = torneo["nombre"].split()[-1]
+    cab = "🎾🇦🇷 <b>VICTORIA ARGENTINA:</b>" if arg_gana else f"🎾🇦🇷 <b>Derrota argentina en el FIP de {lugar}</b>"
     lineas = [
-        cabecera,
-        f"{torneo['emoji']} <b>{torneo['nombre'].upper()}</b> | {ronda_actual.upper()}",
+        cab,
+        f"{torneo['emoji']} <b>{torneo['nombre'].upper()}</b> | {ronda.upper()}",
         f"📍 {torneo['ciudad']} {torneo['bandera']}",
         "",
-        f"✅ {g1} / {g2}",
-        f"❌ {p1} / {p2}",
+        f"✅ {nombre_display(gan[0])} / {nombre_display(gan[1])}",
+        f"❌ {nombre_display(per[0])} / {nombre_display(per[1])}",
         f"🎯 {marcador}",
         "",
+        LINK_WEB,
     ]
-    if arg_gana and ronda_siguiente:
-        lineas.append(f"➡️ Avanzan a <b>{ronda_siguiente}</b>")
-        lineas.append("")
-    lineas.append(LINK_WEB)
-
     return "\n".join(lineas)
 
-def msg_campeon_premier(torneo, campeones, finalistas, marcador, es_arg):
-    c1 = nombre_display(campeones[0])
-    c2 = nombre_display(campeones[1])
-    f1 = nombre_display(finalistas[0])
-    f2 = nombre_display(finalistas[1])
-
+def msg_campeon(torneo, cam, fin, marcador, es_arg):
     if es_arg:
-        cabecera = "👑🇦🇷 <b>¡¡CAMPEONES ARGENTINOS!! ¡¡LOS PIBES SE LLEVARON EL TÍTULO!!</b>"
+        cab = "👑🇦🇷 <b>¡¡CAMPEONES ARGENTINOS!! ¡¡LOS PIBES SE LLEVARON EL TÍTULO!!</b>"
     else:
-        ap1 = campeones[0].split()[-1]
-        ap2 = campeones[1].split()[-1]
-        cabecera = f"🏆 <b>¡CAMPEONES! {ap1} y {ap2}</b>"
-
-    return (
-        f"{cabecera}\n\n"
-        f"{torneo['emoji']} <b>{torneo['nombre'].upper()} — FINAL</b>\n"
-        f"📍 {torneo['ciudad']} {torneo['bandera']}\n\n"
-        f"🥇 {c1} / {c2}\n"
-        f"🥈 {f1} / {f2}\n"
-        f"🎯 {marcador}\n\n"
-        f"{LINK_WEB}"
-    )
-
-def msg_resumen_manana(torneo, partidos_manana):
-    """Mensaje de cierre del día con anticipo de mañana"""
-    manana = (hora_argentina() + timedelta(days=1)).strftime("%d/%m/%Y")
-
-    lineas = []
-    lineas.append(f"🌙 <b>MAÑANA EN LA PISTA — {manana}</b>")
-    lineas.append(f"{torneo['emoji']} <b>{torneo['nombre'].upper()}</b>")
-    lineas.append(f"📍 {torneo['ciudad']} {torneo['bandera']}")
-    lineas.append("")
-
-    for pista, partidos in partidos_manana.items():
-        lineas.append(f"🎾 <b>{pista}</b>")
-        for p in partidos:
-            hora_arg = convertir_hora_arg(p["hora_local"], torneo["tz_local"])
-            lineas.append(
-                f"  🇦🇷⏰ {hora_arg}hs "
-                f"({torneo['bandera']} {p['hora_local']}hs)\n"
-                f"  {nombre_display(p['j1'])} / {nombre_display(p['j2'])}\n"
-                f"  vs\n"
-                f"  {nombre_display(p['j3'])} / {nombre_display(p['j4'])}"
-            )
-        lineas.append("")
-
-    lineas.append("¡Nos vemos mañana! 🎾🇦🇷")
-    lineas.append("")
-    lineas.append(LINK_WEB)
-    return "\n".join(lineas)
-
-def msg_noticia_destacada(titulo, url):
-    return (
-        f"📰 <b>NOTICIA DESTACADA</b>\n\n"
-        f"{titulo}\n\n"
-        f"🔗 {url}\n\n"
-        f"{LINK_WEB}"
-    )
+        cab = f"🏆 <b>¡CAMPEONES! {apellido(cam[0])} y {apellido(cam[1])}</b>"
+    return "\n".join([
+        cab,
+        f"{torneo['emoji']} <b>{torneo['nombre'].upper()} — FINAL</b>",
+        f"📍 {torneo['ciudad']} {torneo['bandera']}",
+        "",
+        f"🥇 {nombre_display(cam[0])} / {nombre_display(cam[1])}",
+        f"🥈 {nombre_display(fin[0])} / {nombre_display(fin[1])}",
+        f"🎯 {marcador}",
+        "",
+        LINK_WEB,
+    ])
 
 # ─────────────────────────────────────────────
-# PUBLICAR CUADROS AL INICIO DEL TORNEO
+# TAREAS
 # ─────────────────────────────────────────────
 
-def publicar_cuadros_torneo(torneo):
-    pid = f"cuadros_{torneo['nombre']}"
+def tarea_cuadros():
+    for torneo in TORNEOS_PREMIER:
+        tid = f"cuadros_{torneo['nombre']}"
+        if ya_hecho_hoy(tid):
+            continue
+        for ss_id, genero in [(torneo["ss_id_men"], "Masculino"),
+                               (torneo["ss_id_women"], "Femenino")]:
+            parejas = cuadros_ss(ss_id)
+            if parejas:
+                msg = msg_cuadros(torneo, genero, parejas[:6], parejas)
+                enviar(msg)
+                time.sleep(4)
+        marcar_hecho_hoy(tid)
+
+def tarea_orden_dia():
+    for torneo in TORNEOS_PREMIER:
+        tid = f"orden_dia_{torneo['nombre']}"
+        if ya_hecho_hoy(tid):
+            continue
+        # Solo publicar si ya no quedan partidos hoy
+        if partidos_proximos_hoy(torneo["ss_id_men"]):
+            continue
+        pistas = orden_dia_manana(torneo["ss_id_men"], torneo["tz_local"])
+        if pistas:
+            if enviar(msg_orden_dia(torneo, pistas)):
+                marcar_hecho_hoy(tid)
+
+def monitorear_premier():
     publicados = cargar_publicados()
-    if pid in publicados:
-        return
+    for torneo in TORNEOS_PREMIER:
+        for ss_id in [torneo["ss_id_men"], torneo["ss_id_women"]]:
+            for p in partidos_finalizados_hoy(ss_id):
+                d   = parsear(p)
+                pid = f"premier_{d['id']}"
+                if pid in publicados:
+                    continue
+                msg = msg_resultado_premier(
+                    torneo, d["ganadores"], d["perdedores"],
+                    d["marcador"], d["tiempo"], d["ronda"]
+                )
+                if enviar(msg):
+                    guardar_publicado(pid)
+                    time.sleep(4)
 
-    print(f"📋 Publicando cuadros de {torneo['nombre']}...")
-
-    for genero in ["Masculino", "Femenino"]:
-        # Qualifying
-        msg_q = msg_cuadro_qualifying(torneo, genero)
-        if msg_q:
-            enviar_mensaje(msg_q)
-            time.sleep(3)
-
-        # Principal
-        msg_p = msg_cuadro_principal(torneo, genero)
-        if msg_p:
-            enviar_mensaje(msg_p)
-            time.sleep(3)
-
-    guardar_publicado(pid)
-
-# ─────────────────────────────────────────────
-# MONITOREO DE NOTICIAS Y RESULTADOS
-# ─────────────────────────────────────────────
-
-def procesar_noticias(noticias, torneos, solo_argentinos=False):
+def monitorear_fip():
+    from bs4 import BeautifulSoup
     publicados = cargar_publicados()
-
-    for noticia in noticias:
-        url    = noticia["url"]
-        titulo = noticia["titulo"]
-
-        if url in publicados:
-            continue
-
-        tiene_arg = any(a.lower() in titulo.lower() for a in ARGENTINOS)
-        es_resultado = any(kw in titulo.lower() for kw in [
-            "vence", "gana", "triunfa", "campeón", "resultado",
-            "derrota", "elimina", "avanza", "final", "día"
-        ])
-
-        if not es_resultado:
-            continue
-
-        if solo_argentinos and not tiene_arg:
-            continue
-
-        # Encontrar torneo correspondiente
-        torneo_match = None
-        for t in torneos:
-            if any(p.lower() in url.lower() for p in t["nombre"].lower().split()):
-                torneo_match = t
-                break
-
-        if not torneo_match:
-            torneo_match = torneos[0] if torneos else None
-
-        if not torneo_match:
-            continue
-
-        # Formatear mensaje
-        if solo_argentinos:
-            arg_gana = any(kw in titulo.lower() for kw in
-                          ["vence", "gana", "triunfa", "campeón", "avanza"])
-            partes   = torneo_match["nombre"].split()
-            lugar    = partes[-1]
-            if arg_gana:
-                cabecera = f"🎾🇦🇷 <b>VICTORIA ARGENTINA:</b>"
-            else:
-                cabecera = f"🎾🇦🇷 <b>Derrota argentina en el FIP de {lugar}</b>"
-        else:
-            if tiene_arg:
-                cabecera = "🇦🇷⚡ <b>VICTORIA ARGENTINA</b>"
-            else:
-                cabecera = "🎾 <b>RESULTADO</b>"
-
-        msg = (
-            f"{cabecera}\n\n"
-            f"{torneo_match['emoji']} <b>{torneo_match['nombre'].upper()}</b>\n"
-            f"📍 {torneo_match['ciudad']} {torneo_match['bandera']}\n\n"
-            f"📋 {titulo}\n\n"
-            f"{LINK_WEB}"
-        )
-
-        if enviar_mensaje(msg):
-            guardar_publicado(url)
-            time.sleep(3)
-
-# ─────────────────────────────────────────────
-# TAREAS PROGRAMADAS
-# ─────────────────────────────────────────────
-
-estado = cargar_json(ARCHIVO_ESTADO)
-
-def ya_hecho_hoy(tarea):
-    hoy = hora_argentina().strftime("%Y-%m-%d")
-    return estado.get(tarea) == hoy
-
-def marcar_hecho_hoy(tarea):
-    estado[tarea] = hora_argentina().strftime("%Y-%m-%d")
-    guardar_json(ARCHIVO_ESTADO, estado)
-
-def tareas_programadas():
-    ahora = hora_argentina()
-    hora  = ahora.hour
-
-    # 7hs — orden del día
-    if hora == HORA_ORDEN_DIA and not ya_hecho_hoy("orden_dia"):
-        for torneo in TORNEOS_PREMIER:
-            # Publicar cuadros si es inicio de torneo
-            publicar_cuadros_torneo(torneo)
-            # Mensaje de bienvenida al día
+    try:
+        r = requests.get("https://www.padelfip.com/es/noticias/",
+                         headers={"User-Agent": "Mozilla/5.0"}, timeout=15)
+        soup = BeautifulSoup(r.text, "html.parser")
+        vistos = set()
+        for a in soup.find_all("a", href=True):
+            href  = a.get("href", "")
+            texto = a.get_text(strip=True)
+            if "/2026/" not in href or len(texto) < 25:
+                continue
+            if href in vistos or href in publicados:
+                continue
+            vistos.add(href)
+            tiene_arg = any(k.lower() in texto.lower() for k in ARGENTINOS)
+            es_result = any(kw in texto.lower() for kw in [
+                "vence", "gana", "triunfa", "campeón", "derrota", "elimina", "avanza"
+            ])
+            if not tiene_arg or not es_result:
+                continue
+            torneo   = TORNEOS_FIP[0]
+            arg_gana = any(kw in texto.lower() for kw in
+                           ["vence", "gana", "triunfa", "campeón", "avanza"])
+            lugar    = torneo["nombre"].split()[-1]
+            cab = "🎾🇦🇷 <b>VICTORIA ARGENTINA:</b>" if arg_gana else f"🎾🇦🇷 <b>Derrota argentina en el FIP de {lugar}</b>"
             msg = (
-                f"☀️ <b>¡BUENOS DÍAS PADELEROS! 🎾🇦🇷</b>\n\n"
-                f"Hoy tenemos pádel de alto nivel.\n"
-                f"Te traemos todos los resultados en tiempo real.\n\n"
-                f"{LINK_WEB}"
-            )
-            enviar_mensaje(msg)
-        marcar_hecho_hoy("orden_dia")
-
-    # 22hs — anticipo de mañana
-    if hora == HORA_RESUMEN_MANANA and not ya_hecho_hoy("resumen_manana"):
-        for torneo in TORNEOS_PREMIER:
-            msg = (
-                f"🌙 <b>CERRAMOS LA JORNADA 🎾</b>\n\n"
-                f"Mañana seguimos con más pádel en vivo.\n"
-                f"Todos los horarios y resultados acá.\n\n"
-                f"{torneo['emoji']} {torneo['nombre']}\n"
+                f"{cab}\n\n"
+                f"{torneo['emoji']} <b>{torneo['nombre'].upper()}</b>\n"
                 f"📍 {torneo['ciudad']} {torneo['bandera']}\n\n"
-                f"¡Hasta mañana! 🇦🇷\n\n"
+                f"📋 {texto}\n\n"
                 f"{LINK_WEB}"
             )
-            enviar_mensaje(msg)
-        marcar_hecho_hoy("resumen_manana")
+            if enviar(msg):
+                guardar_publicado(href)
+                time.sleep(3)
+    except Exception as e:
+        print(f"[FIP TG] {e}")
 
 # ─────────────────────────────────────────────
-# LOOP PRINCIPAL
+# LOOP
 # ─────────────────────────────────────────────
 
 def ciclo():
     print(f"\n{'='*50}")
-    print(f"🤖 BOT TELEGRAM PADEL ARGENTINA — INICIADO")
-    print(f"📅 {hora_argentina().strftime('%d/%m/%Y %H:%M:%S')}")
+    print(f"🤖 BOT TELEGRAM — PADEL ARGENTINA INICIADO")
+    print(f"📅 {hora_arg().strftime('%d/%m/%Y %H:%M:%S')}")
     print(f"{'='*50}\n")
 
-    # Mensaje de inicio
-    enviar_mensaje(
-        "🤖 <b>Bot Padel Argentina activado</b>\n\n"
-        "Voy a publicar todos los resultados de Premier Padel "
-        "y los partidos de argentinos en torneos FIP en tiempo real.\n\n"
+    enviar(
+        "🤖 <b>Bot Padel Argentina activado ✅</b>\n\n"
+        "Publicaré:\n"
+        "📋 Cuadros de torneos al inicio\n"
+        "🗓️ Orden del día al terminar cada jornada\n"
+        "🎾 Resultados en tiempo real\n"
+        "🇦🇷 Victoria/derrota argentina\n\n"
         f"{LINK_WEB}"
     )
 
     contador = 0
-
     while True:
-        ahora_str = hora_argentina().strftime("%H:%M:%S")
-        print(f"\n🔍 [{ahora_str}] Chequeando...")
-
-        # Tareas programadas (orden del día, cierre de jornada)
-        tareas_programadas()
-
-        # Obtener noticias
-        noticias = obtener_noticias_fip()
-
-        # Premier Padel — todos los resultados
-        procesar_noticias(noticias, TORNEOS_PREMIER, solo_argentinos=False)
-
-        # FIP — solo argentinos
-        procesar_noticias(noticias, TORNEOS_FIP, solo_argentinos=True)
-
-        intervalo = INTERVALO_PREMIER if contador % 2 == 0 else INTERVALO_FIP
-        print(f"✅ Ciclo {contador+1} — próximo en {intervalo} min")
+        print(f"\n🔍 [{hora_arg().strftime('%H:%M:%S')}] Ciclo {contador+1}")
+        tarea_cuadros()
+        tarea_orden_dia()
+        monitorear_premier()
+        monitorear_fip()
+        print(f"✅ Próximo en {INTERVALO_MIN} min")
         contador += 1
-        time.sleep(intervalo * 60)
+        time.sleep(INTERVALO_MIN * 60)
 
 if __name__ == "__main__":
     ciclo()
