@@ -19,21 +19,14 @@ ARCHIVO_PUB      = "tg_pub.json"
 ARCHIVO_ESTADO   = "tg_estado.json"
 LINK_WEB         = "🌐 www.padelargentina.com.ar"
 
-DIAS_EN = {0:"MONDAY",1:"TUESDAY",2:"WEDNESDAY",3:"THURSDAY",
-           4:"FRIDAY",5:"SATURDAY",6:"SUNDAY"}
-MESES_EN = {1:"JANUARY",2:"FEBRUARY",3:"MARCH",4:"APRIL",5:"MAY",6:"JUNE",
-            7:"JULY",8:"AUGUST",9:"SEPTEMBER",10:"OCTOBER",11:"NOVEMBER",12:"DECEMBER"}
+DIAS_EN  = {0:"MONDAY",1:"TUESDAY",2:"WEDNESDAY",3:"THURSDAY",4:"FRIDAY",5:"SATURDAY",6:"SUNDAY"}
+MESES_EN = {1:"JANUARY",2:"FEBRUARY",3:"MARCH",4:"APRIL",5:"MAY",6:"JUNE",7:"JULY",8:"AUGUST",9:"SEPTEMBER",10:"OCTOBER",11:"NOVEMBER",12:"DECEMBER"}
 
-# ── Lista de apellidos argentinos (estable, cambia poco) ──
-ARGENTINOS = [
-    "tapia","chingotto","stupaczuk","augsburger","di nenno","dinenno",
-    "alfonso","aguirre","tello","arce","capra","piotto","belluati",
-    "rubini","mourino","mouriño","libaak","chozas","gutierrez","gutiérrez",
-    "sanchez blasco","sánchez blasco","torre","forastello","de pascual",
-    "sanchez aguero","sánchez agüero","brea","sanchez","sánchez","araujo",
-    "araújo","valenzuela","pilcher","maldonado","puppo","lopez","lópez",
-    "garrido","bergamini","cardona","gil","alonso","ruiz","sanz",
-]
+BANDERAS = {
+    "spain":"🇪🇸","valencia":"🇪🇸","lanzarote":"🇪🇸","badajoz":"🇪🇸","malaga":"🇪🇸","valladolid":"🇪🇸",
+    "china":"🇨🇳","shanghai":"🇨🇳","italy":"🇮🇹","palermo":"🇮🇹","slovenia":"🇸🇮","ljubljana":"🇸🇮",
+    "france":"🇫🇷","bordeaux":"🇫🇷","portugal":"🇵🇹","paredes":"🇵🇹","germany":"🇩🇪","poland":"🇵🇱",
+}
 
 # ══════════════════════════════════════════════
 #  HELPERS
@@ -41,10 +34,6 @@ ARGENTINOS = [
 
 def hora_arg():
     return datetime.now(ARGENTINA_TZ)
-
-def es_argentino(texto):
-    t = texto.lower()
-    return any(a in t for a in ARGENTINOS)
 
 def cargar_json(f):
     if os.path.exists(f):
@@ -73,19 +62,18 @@ def marcar_hoy(t):
     e[t] = hora_arg().strftime("%Y-%m-%d")
     guardar_json(ARCHIVO_ESTADO, e)
 
+def bandera_de(texto):
+    t = texto.lower()
+    for k, v in BANDERAS.items():
+        if k in t:
+            return v
+    return "🌍"
+
 # ══════════════════════════════════════════════
-#  LECTOR WEB CON 3 FUENTES EN CASCADA
-#  (esquiva el bloqueo de Railway a padelfip.com)
+#  LECTOR WEB EN CASCADA
 # ══════════════════════════════════════════════
 
 def leer_url(url, espera_pdf=False):
-    """
-    Intenta leer una URL probando 3 vías en orden:
-    1. Directo
-    2. Proxy CodeTabs
-    3. Proxy AllOrigins
-    Devuelve el contenido (bytes si PDF, texto si HTML) o None.
-    """
     intentos = [
         ("directo", url),
         ("codetabs", f"https://api.codetabs.com/v1/proxy/?quest={url}"),
@@ -98,10 +86,9 @@ def leer_url(url, espera_pdf=False):
             if r.status_code == 200 and len(r.content) > 100:
                 if espera_pdf and b"%PDF" not in r.content[:1024]:
                     continue
-                print(f"   ✓ leído vía {nombre}")
                 return r.content if espera_pdf else r.text
-        except Exception as e:
-            print(f"   ✗ {nombre} falló: {str(e)[:60]}")
+        except Exception:
+            pass
     return None
 
 # ══════════════════════════════════════════════
@@ -116,122 +103,123 @@ def tg_enviar(texto):
                   "parse_mode": "HTML", "disable_web_page_preview": True},
             timeout=15)
         ok = r.status_code == 200
-        print(f"{'✅' if ok else '❌'} TG msg: {texto[:50]}...")
+        print(f"{'✅' if ok else '❌'} TG: {texto[:45]}...")
         if not ok:
-            print(f"   detalle: {r.text[:120]}")
+            print(f"   {r.text[:120]}")
         return ok
     except Exception as e:
         print(f"❌ TG error: {e}")
         return False
 
-def tg_enviar_pdf(pdf_bytes, nombre_archivo, caption):
+def tg_enviar_pdf(pdf_bytes, nombre, caption):
     try:
         r = requests.post(
             f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendDocument",
             data={"chat_id": TELEGRAM_CHAT_ID, "caption": caption, "parse_mode": "HTML"},
-            files={"document": (nombre_archivo, pdf_bytes, "application/pdf")},
+            files={"document": (nombre, pdf_bytes, "application/pdf")},
             timeout=40)
-        ok = r.status_code == 200
-        print(f"{'✅' if ok else '❌'} TG pdf: {nombre_archivo}")
-        return ok
-    except Exception as e:
-        print(f"❌ TG pdf error: {e}")
+        return r.status_code == 200
+    except Exception:
         return False
 
 # ══════════════════════════════════════════════
-#  DETECCIÓN AUTOMÁTICA DE TORNEOS ACTIVOS
+#  DETECTAR TORNEOS ACTIVOS
 # ══════════════════════════════════════════════
 
-def detectar_torneos_activos():
-    """
-    Lee la home de FIP y devuelve lista de torneos activos:
-    [{nombre, ciudad, pais, url_evento, bandera}]
-    """
+def detectar_torneos():
     html = leer_url("https://www.padelfip.com/es/")
     if not html:
-        print("⚠️ No se pudo leer la home de FIP")
         return []
-
     soup = BeautifulSoup(html, "html.parser")
     torneos = []
     vistos = set()
-
-    # Buscar enlaces a eventos
-    for a in soup.find_all("a", href=True):
-        href = a.get("href", "")
-        if "/events/" in href and href not in vistos:
-            vistos.add(href)
-            nombre = a.get_text(strip=True)
-            if len(nombre) < 4:
-                # buscar texto en el contenedor padre
-                cont = a.find_parent()
-                if cont:
-                    nombre = cont.get_text(" ", strip=True)[:60]
-            if not href.startswith("http"):
-                href = "https://www.padelfip.com" + href
-            torneos.append({
-                "nombre": nombre or "Torneo FIP",
-                "url_evento": href,
-            })
-
-    print(f"🔎 {len(torneos)} torneos detectados en la home")
+    for a in soup.find_all("a", href=True, title=True):
+        href = a["href"]
+        titulo = a.get("title", "").strip()
+        if "/events/" in href and titulo and titulo not in ("En directo", "Ir al evento"):
+            if href not in vistos:
+                vistos.add(href)
+                if not href.startswith("http"):
+                    href = "https://www.padelfip.com" + href
+                torneos.append({"nombre": titulo, "url": href})
+    print(f"🔎 {len(torneos)} torneos activos detectados")
     return torneos
 
-BANDERAS = {
-    "spain":"🇪🇸","espana":"🇪🇸","españa":"🇪🇸","valencia":"🇪🇸","lanzarote":"🇪🇸","badajoz":"🇪🇸",
-    "china":"🇨🇳","shanghai":"🇨🇳",
-    "italy":"🇮🇹","italia":"🇮🇹","palermo":"🇮🇹",
-    "slovenia":"🇸🇮","eslovenia":"🇸🇮","ljubljana":"🇸🇮",
-    "france":"🇫🇷","francia":"🇫🇷",
-    "portugal":"🇵🇹","germany":"🇩🇪","poland":"🇵🇱",
-    "argentina":"🇦🇷","chile":"🇨🇱","mexico":"🇲🇽",
-}
-
-def bandera_de(texto):
-    t = texto.lower()
-    for k, v in BANDERAS.items():
-        if k in t:
-            return v
-    return "🌍"
-
 # ══════════════════════════════════════════════
-#  LECTURA DE RESULTADOS DE UN TORNEO
+#  EXTRAER RESULTADOS FINALES DE ARGENTINOS
 # ══════════════════════════════════════════════
 
-def resultados_torneo(torneo):
+def extraer_resultados(torneo):
     """
-    Lee la página de un torneo y extrae resultados finalizados
-    donde participan argentinos.
-    Devuelve lista de dicts con los datos del partido.
+    Recorre los jugadores del cuadro en orden. Cada jugador trae:
+    bandera, nombre, y (si su pareja ganó) un ✓ con los games.
+    Agrupa de a 4 jugadores = 1 partido.
+    Devuelve partidos TERMINADOS (con ✓) que tienen al menos un argentino.
     """
-    html = leer_url(torneo["url_evento"])
+    html = leer_url(torneo["url"])
     if not html:
         return []
 
     soup = BeautifulSoup(html, "html.parser")
-    texto = soup.get_text("\n", strip=True)
-    lineas = [l for l in texto.split("\n") if l.strip()]
 
-    resultados = []
-    bandera = bandera_de(torneo["nombre"] + " " + torneo["url_evento"])
+    # Recolectar jugadores en orden de aparición
+    jugadores = []
+    for img in soup.find_all("img", {"title": "flag"}):
+        src = img.get("src", "")
+        es_arg = "argentina" in src.lower()
 
-    # Buscar bloques con scores (formato tipo "6-4 6-2")
-    patron_score = re.compile(r"\b[0-7]\s*[-/]\s*[0-7]\b")
-    for i, linea in enumerate(lineas):
-        bloque = " ".join(lineas[max(0,i-3):i+3])
-        if patron_score.search(linea) and es_argentino(bloque):
-            sig = f"{torneo['nombre']}_{i}_{linea[:40]}"
-            resultados.append({
-                "torneo": torneo["nombre"],
-                "bandera": bandera,
-                "detalle": bloque[:240],
-                "id": sig,
+        # Nombre: primer texto significativo después de la imagen
+        nombre = ""
+        nodo = img
+        for _ in range(5):
+            nodo = nodo.find_next(string=True)
+            if not nodo:
+                break
+            t = nodo.strip()
+            if len(t) > 4 and "flag" not in t.lower() and not t.startswith("("):
+                nombre = t
+                break
+
+        # ¿Ganó? buscar ✓ en el entorno cercano del jugador
+        entorno = ""
+        nodo2 = img
+        for _ in range(8):
+            nodo2 = nodo2.find_next(string=True)
+            if not nodo2:
+                break
+            entorno += " " + nodo2.strip()
+        gano = "✓" in entorno
+
+        # Games: números sueltos en el entorno (después del nombre)
+        games = re.findall(r"\b([0-7])\b", entorno)
+
+        if nombre:
+            jugadores.append({
+                "nombre": nombre, "es_arg": es_arg,
+                "gano": gano, "games": games[:3],
             })
 
-    return resultados
+    # Agrupar de a 4 (2 parejas)
+    partidos = []
+    for i in range(0, len(jugadores) - 3, 4):
+        g = jugadores[i:i+4]
+        if not all(j["nombre"] for j in g):
+            continue
+        hay_arg = any(j["es_arg"] for j in g)
+        # partido terminado si alguno de los 4 tiene ✓
+        terminado = any(j["gano"] for j in g)
+        if hay_arg and terminado:
+            # pareja ganadora: la que tiene ✓
+            p1_gano = g[0]["gano"] or g[1]["gano"]
+            partidos.append({
+                "p1": (g[0], g[1]), "p2": (g[2], g[3]),
+                "p1_gano": p1_gano,
+            })
+
+    return partidos
 
 # ══════════════════════════════════════════════
-#  ORDEN DEL DÍA (PDF) — solo Valencia / Premier
+#  ORDEN DEL DÍA (PDF)
 # ══════════════════════════════════════════════
 
 def url_pdf(fecha):
@@ -244,73 +232,89 @@ def tarea_orden_dia():
     if ya_hoy(tid):
         return
     manana = (hora_arg() + timedelta(days=1)).date()
-    pdf_url = url_pdf(manana)
-    pdf_bytes = leer_url(pdf_url, espera_pdf=True)
+    pdf_bytes = leer_url(url_pdf(manana), espera_pdf=True)
     if not pdf_bytes:
-        print(f"[PDF] No disponible aún para {manana}")
         return
     dia_en = DIAS_EN[manana.weekday()].capitalize()
-    nombre_archivo = f"orden-de-juego-{manana.day}-{MESES_EN[manana.month].lower()}.pdf"
+    nombre = f"orden-de-juego-{manana.day}-{MESES_EN[manana.month].lower()}.pdf"
     caption = (
         f"🗓️ <b>ORDEN DE JUEGO — {dia_en} {manana.strftime('%d/%m/%Y')}</b>\n"
         f"🏟️ <b>PREMIER PADEL P1 VALENCIA</b> 🇪🇸\n\n"
-        f"📋 Todos los partidos, horarios y pistas.\n\n"
-        f"{LINK_WEB}"
+        f"📋 Todos los partidos, horarios y pistas.\n\n{LINK_WEB}"
     )
-    if tg_enviar_pdf(pdf_bytes, nombre_archivo, caption):
+    if tg_enviar_pdf(pdf_bytes, nombre, caption):
         marcar_hoy(tid)
+        print("✅ PDF orden del día enviado")
 
 # ══════════════════════════════════════════════
-#  MONITOREO PRINCIPAL
+#  MONITOREO
 # ══════════════════════════════════════════════
 
-def monitorear_resultados():
-    pub = cargar_torneos = cargar_pub()
-    torneos = detectar_torneos_activos()
-    if not torneos:
-        return
+def monitorear():
+    pub = cargar_pub()
+    torneos = detectar_torneos()
 
     for torneo in torneos:
-        print(f"📂 Revisando: {torneo['nombre'][:40]}")
-        for res in resultados_torneo(torneo):
-            if res["id"] in pub:
+        bandera = bandera_de(torneo["nombre"] + " " + torneo["url"])
+        print(f"📂 {torneo['nombre'][:40]}")
+        try:
+            partidos = extraer_resultados(torneo)
+        except Exception as e:
+            print(f"   ⚠️ {e}")
+            continue
+
+        for p in partidos:
+            (j1a, j1b) = p["p1"]
+            (j2a, j2b) = p["p2"]
+            pid = f"{torneo['url']}_{j1a['nombre']}_{j2a['nombre']}"
+            if pid in pub:
                 continue
-            es_premier = any(k in res["torneo"].lower() for k in
-                             ["premier","p1","p2","major","valencia"])
-            if es_premier:
-                cab = "🇦🇷⚡ <b>VICTORIA ARGENTINA</b>" if es_argentino(res["detalle"]) else "🎾 <b>RESULTADO</b>"
+
+            def fmt(j):
+                return f"🇦🇷 {j['nombre']}" if j["es_arg"] else j["nombre"]
+
+            if p["p1_gano"]:
+                gan_a, gan_b = j1a, j1b
+                per_a, per_b = j2a, j2b
             else:
-                lugar = res["torneo"].split()[-1] if res["torneo"].split() else ""
-                gana = any(kw in res["detalle"].lower() for kw in
-                           ["gana","vence","triunfa","avanza","campeón","campeon"])
-                cab = "🎾🇦🇷 <b>VICTORIA ARGENTINA:</b>" if gana else f"🎾🇦🇷 <b>Derrota argentina en el FIP de {lugar}</b>"
+                gan_a, gan_b = j2a, j2b
+                per_a, per_b = j1a, j1b
+
+            gano_arg = gan_a["es_arg"] or gan_b["es_arg"]
+            perdio_arg = per_a["es_arg"] or per_b["es_arg"]
+
+            lugar = torneo["nombre"].split()[-1]
+            if gano_arg:
+                cab = "🎾🇦🇷 <b>VICTORIA ARGENTINA</b>"
+            else:
+                cab = f"🎾🇦🇷 <b>Derrota argentina en {lugar}</b>"
 
             msg = (
-                f"{cab}\n\n"
-                f"{res['bandera']} <b>{res['torneo'].upper()}</b>\n\n"
-                f"📋 {res['detalle']}\n\n"
+                f"{cab}\n"
+                f"{bandera} <b>{torneo['nombre'].upper()}</b>\n\n"
+                f"✅ {fmt(gan_a)} / {fmt(gan_b)}\n"
+                f"❌ {fmt(per_a)} / {fmt(per_b)}\n\n"
                 f"{LINK_WEB}"
             )
             if tg_enviar(msg):
-                guardar_pub(res["id"])
+                guardar_pub(pid)
                 time.sleep(3)
 
 # ══════════════════════════════════════════════
-#  LOOP PRINCIPAL
+#  LOOP
 # ══════════════════════════════════════════════
 
 def ciclo():
     print("="*50)
-    print(f"🤖 BOT TELEGRAM PADEL ARGENTINA")
+    print("🤖 BOT TELEGRAM PADEL ARGENTINA")
     print(f"📅 {hora_arg().strftime('%d/%m/%Y %H:%M')}")
     print("="*50)
 
     tg_enviar(
         "🤖 <b>Bot Padel Argentina activo ✅</b>\n\n"
-        "Detección automática de torneos FIP + Premier.\n"
+        "🎾 Resultados finales de argentinos en todos los FIP\n"
         "📋 Orden del día en PDF\n"
-        "🎾 Resultados de argentinos en tiempo real\n"
-        "🇦🇷 Victoria / derrota argentina\n\n"
+        "🇦🇷 Detección automática por bandera argentina\n\n"
         f"{LINK_WEB}"
     )
 
@@ -319,9 +323,9 @@ def ciclo():
         print(f"\n🔍 [{hora_arg().strftime('%H:%M:%S')}] Ciclo {contador+1}")
         try:
             tarea_orden_dia()
-            monitorear_resultados()
+            monitorear()
         except Exception as e:
-            print(f"⚠️ Error en ciclo: {e}")
+            print(f"⚠️ Error: {e}")
         print(f"✅ Próximo en {INTERVALO_MIN} min")
         contador += 1
         time.sleep(INTERVALO_MIN * 60)
