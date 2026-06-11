@@ -62,6 +62,53 @@ def marcar_hoy(t):
     e[t] = hora_arg().strftime("%Y-%m-%d")
     guardar_json(ARCHIVO_ESTADO, e)
 
+
+CIUDADES = {
+    "valencia":"Valencia","shanghai":"Shanghai","palermo":"Palermo",
+    "lanzarote":"Lanzarote","slovenia":"Eslovenia","ljubljana":"Eslovenia",
+    "badajoz":"Badajoz","portugal":"Portugal","valladolid":"Valladolid",
+    "bordeaux":"Bordeaux","malaga":"Málaga","paredes":"Portugal",
+}
+
+
+
+RONDAS = {
+    "final": "FINAL",
+    "semifinal": "SEMIFINAL", "semi-final": "SEMIFINAL", "1/2": "SEMIFINAL",
+    "quarterfinal": "CUARTOS DE FINAL", "quarter": "CUARTOS DE FINAL",
+    "1/4": "CUARTOS DE FINAL", "cuartos": "CUARTOS DE FINAL",
+    "round of 16": "OCTAVOS", "r16": "OCTAVOS", "1/8": "OCTAVOS", "octavos": "OCTAVOS",
+    "round of 32": "R32", "r32": "R32", "1/16": "R32",
+    "round of 64": "R64", "r64": "R64",
+    "qualifying": "QUALY", "qualification": "QUALY", "qualy": "QUALY",
+}
+
+def detectar_ronda(texto):
+    t = texto.lower()
+    for k, v in RONDAS.items():
+        if k in t:
+            return v
+    return ""
+
+def categoria_fip(nombre):
+    """Extrae la categoría: Premier P1/P2, FIP Silver/Gold/Platinum/Bronze."""
+    t = nombre.lower()
+    if "platinum" in t: return "FIP PLATINUM"
+    if "gold" in t:     return "FIP GOLD"
+    if "silver" in t:   return "FIP SILVER"
+    if "bronze" in t:   return "FIP BRONZE"
+    if "p1" in t:       return "PREMIER PADEL P1"
+    if "p2" in t:       return "PREMIER PADEL P2"
+    if "major" in t:    return "PREMIER PADEL MAJOR"
+    return "FIP"
+
+def ciudad_de(nombre_torneo):
+    t = nombre_torneo.lower()
+    for k, v in CIUDADES.items():
+        if k in t:
+            return v
+    return nombre_torneo.split()[-1] if nombre_torneo.split() else "el torneo"
+
 def bandera_de(texto):
     t = texto.lower()
     for k, v in BANDERAS.items():
@@ -197,6 +244,7 @@ def extraer_resultados(torneo):
             jugadores.append({
                 "nombre": nombre, "es_arg": es_arg,
                 "gano": gano, "games": games[:3],
+                "entorno": entorno,
             })
 
     # Agrupar de a 4 (2 parejas)
@@ -211,9 +259,16 @@ def extraer_resultados(torneo):
         if hay_arg and terminado:
             # pareja ganadora: la que tiene ✓
             p1_gano = g[0]["gano"] or g[1]["gano"]
+            # ronda: buscar en el entorno del primer jugador
+            ronda = ""
+            for jug in g:
+                r = detectar_ronda(jug.get("entorno", ""))
+                if r:
+                    ronda = r
+                    break
             partidos.append({
                 "p1": (g[0], g[1]), "p2": (g[2], g[3]),
-                "p1_gano": p1_gano,
+                "p1_gano": p1_gano, "ronda": ronda,
             })
 
     return partidos
@@ -250,6 +305,18 @@ def tarea_orden_dia():
 #  MONITOREO
 # ══════════════════════════════════════════════
 
+
+def construir_marcador(gan_a, gan_b, per_a, per_b):
+    """Combina los games de ganador y perdedor en formato 6-4 / 6-2."""
+    games_gan = gan_a.get("games") or gan_b.get("games") or []
+    games_per = per_a.get("games") or per_b.get("games") or []
+    sets = []
+    for i in range(max(len(games_gan), len(games_per))):
+        g = games_gan[i] if i < len(games_gan) else "?"
+        p = games_per[i] if i < len(games_per) else "?"
+        sets.append(f"{g}-{p}")
+    return " / ".join(sets) if sets else ""
+
 def monitorear():
     pub = cargar_pub()
     torneos = detectar_torneos()
@@ -262,6 +329,14 @@ def monitorear():
         except Exception as e:
             print(f"   ⚠️ {e}")
             continue
+
+        # DIAGNÓSTICO: mostrar el primer partido leído de este torneo
+        if partidos:
+            _p = partidos[0]
+            print(f"   🔬 DIAG partido: "
+                  f"{_p['p1'][0]['nombre']}({_p['p1'][0].get('games')}) "
+                  f"{_p['p1'][1]['nombre']}({_p['p1'][1].get('games')}) "
+                  f"gano_p1={_p['p1_gano']}")
 
         for p in partidos:
             (j1a, j1b) = p["p1"]
@@ -283,17 +358,24 @@ def monitorear():
             gano_arg = gan_a["es_arg"] or gan_b["es_arg"]
             perdio_arg = per_a["es_arg"] or per_b["es_arg"]
 
-            lugar = torneo["nombre"].split()[-1]
+            lugar = ciudad_de(torneo["nombre"])
+            cat = categoria_fip(torneo["nombre"])
+            ronda = p.get("ronda", "")
+            ronda_txt = f" | {ronda}" if ronda else ""
             if gano_arg:
                 cab = "🎾🇦🇷 <b>VICTORIA ARGENTINA</b>"
             else:
-                cab = f"🎾🇦🇷 <b>Derrota argentina en {lugar}</b>"
+                cab = f"🎾🇦🇷 <b>Derrota argentina en el {cat} de {lugar}</b>"
+
+            marcador = construir_marcador(gan_a, gan_b, per_a, per_b)
+            linea_marcador = f"🎯 {marcador}\n\n" if marcador else ""
 
             msg = (
                 f"{cab}\n"
-                f"{bandera} <b>{torneo['nombre'].upper()}</b>\n\n"
+                f"{bandera} <b>{cat} — {lugar.upper()}</b>{ronda_txt}\n\n"
                 f"✅ {fmt(gan_a)} / {fmt(gan_b)}\n"
-                f"❌ {fmt(per_a)} / {fmt(per_b)}\n\n"
+                f"❌ {fmt(per_a)} / {fmt(per_b)}\n"
+                f"{linea_marcador}"
                 f"{LINK_WEB}"
             )
             if tg_enviar(msg):
