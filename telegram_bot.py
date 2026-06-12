@@ -188,6 +188,8 @@ def detectar_torneos():
                     href = "https://www.padelfip.com" + href
                 torneos.append({"nombre": titulo, "url": href})
     print(f"🔎 {len(torneos)} torneos activos detectados")
+    for t in torneos:
+        print(f"   📌 {t['nombre'][:40]} -> {t['url'][-40:]}")
     return torneos
 
 # ══════════════════════════════════════════════
@@ -206,6 +208,7 @@ def datos_torneo(torneo):
         return None
 
     # Buscar patrón FIP-2026-XXXX
+    print(f"   🔬 HTML largo={len(html)} primeros chars={repr(html[:200])}")
     m = re.search(r"FIP-(\d{4})-(\d+)", html)
     if not m:
         if DIAG:
