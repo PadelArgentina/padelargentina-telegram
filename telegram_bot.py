@@ -24,13 +24,13 @@ BANDERAS_PAIS = {
     "spain":"🇪🇸","valencia":"🇪🇸","lanzarote":"🇪🇸","badajoz":"🇪🇸","malaga":"🇪🇸","valladolid":"🇪🇸",
     "china":"🇨🇳","shanghai":"🇨🇳","italy":"🇮🇹","palermo":"🇮🇹","slovenia":"🇸🇮","ljubljana":"🇸🇮",
     "france":"🇫🇷","bordeaux":"🇫🇷","portugal":"🇵🇹","paredes":"🇵🇹","germany":"🇩🇪","poland":"🇵🇱",
-    "chile":"🇨🇱","japan":"🇯🇵","osaka":"🇯🇵","argentina":"🇦🇷",
+    "chile":"🇨🇱","japan":"🇯🇵","osaka":"🇯🇵",
 }
 CIUDADES = {
     "valencia":"Valencia","shanghai":"Shanghai","palermo":"Palermo","lanzarote":"Lanzarote",
     "slovenia":"Eslovenia","eslovenia":"Eslovenia","badajoz":"Badajoz","portugal":"Portugal",
     "valladolid":"Valladolid","bordeaux":"Bordeaux","malaga":"Málaga","paredes":"Portugal",
-    "chile":"Chile","osaka":"Osaka","japan":"Japón",
+    "chile":"Chile","osaka":"Osaka",
 }
 RONDAS_ES = {
     "quarterfinals":"CUARTOS DE FINAL","semifinals":"SEMIFINAL","final":"FINAL",
@@ -131,10 +131,6 @@ def tg_enviar_pdf(pdf_bytes, nombre, caption):
         return r.status_code == 200
     except: return False
 
-# ══════════════════════════════════════════════
-#  DETECTAR TORNEOS ACTIVOS
-# ══════════════════════════════════════════════
-
 def detectar_torneos():
     html = leer_url("https://www.padelfip.com/es/")
     if not html:
@@ -154,148 +150,147 @@ def detectar_torneos():
     return torneos
 
 # ══════════════════════════════════════════════
-#  OBTENER ID Y DÍA DEL TORNEO
+#  OBTENER ID VÍA ENDPOINT get-result-data.php
 # ══════════════════════════════════════════════
 
-def obtener_id_torneo(url_torneo):
+def obtener_id_via_endpoint(url_torneo):
     """
-    Lee la página del torneo y obtiene el id de matchscorerlive
-    buscando data-tid o el patrón FIP-YEAR-ID en el HTML/JS.
+    Estrategia: leer el HTML de la página del torneo y buscar el id
+    en TODOS los scripts y atributos, incluyendo el texto completo.
+    El id aparece en los scripts inline como tid, eventId, etc.
     """
     html = leer_url(url_torneo)
     if not html: return None, None
 
-    # Buscar data-tid="XXXX" (aparece en el modal de match stats)
-    m = re.search(r'data-tid=["\'](\d+)["\']', html)
-    if m:
-        tid = m.group(1)
-        # Buscar year
-        my = re.search(r'data-year=["\'](\d{4})["\']', html)
-        year = my.group(1) if my else str(hora_arg().year)
+    year = str(hora_arg().year)
+
+    # Buscar en TODO el HTML con múltiples patrones
+    patrones = [
+        r'"tid"\s*[=:]\s*["\']?(\d{3,5})["\']?',
+        r"'tid'\s*[=:]\s*['\"]?(\d{3,5})['\"]?",
+        r'data-tid=["\'](\d{3,5})["\']',
+        r'tid:\s*(\d{3,5})',
+        r'"id"\s*:\s*(\d{3,5})\s*,\s*"year"',
+        r'get-result-data\.php\?year=(\d{4})&id=(\d{3,5})',
+        r'matchscorerlive\.com/[^"\']+/FIP-(\d{4})-(\d{3,5})',
+        r'FIP-(\d{4})-(\d{3,5})',
+        r'event_id\s*[=:]\s*["\']?(\d{3,5})',
+        r'eventId\s*[=:]\s*["\']?(\d{3,5})',
+        r'"crionet_id"\s*:\s*["\']?(\d{3,5})',
+        r'crionet.*?(\d{4,5})',
+    ]
+
+    for patron in patrones:
+        m = re.search(patron, html)
+        if m:
+            # Algunos patrones tienen 2 grupos (year, id)
+            if m.lastindex == 2:
+                return m.group(2), m.group(1)
+            else:
+                tid = m.group(1)
+                if 1000 <= int(tid) <= 9999:  # ids válidos son de 4 dígitos aprox
+                    print(f"   🆔 id={tid} (patrón: {patron[:30]})")
+                    return tid, year
+
+    # Si no encontramos nada, imprimir muestra del HTML para diagnóstico
+    # Buscar cualquier número de 4 dígitos cerca de "tid" o "crionet"
+    contextual = re.findall(r'(?:tid|crionet|event)[^\d]{0,20}(\d{3,5})', html, re.IGNORECASE)
+    if contextual:
+        tid = contextual[0]
+        print(f"   🆔 id={tid} (contextual)")
         return tid, year
 
-    # Fallback: buscar FIP-YEAR-ID en el HTML
-    m2 = re.search(r'FIP-(\d{4})-(\d+)', html)
-    if m2:
-        return m2.group(2), m2.group(1)
-
+    print(f"   ⚠️ Sin id (HTML={len(html)}ch)")
     return None, None
 
 # ══════════════════════════════════════════════
-#  LEER RESULTADOS DEL WIDGET MATCHSCORERLIVE
+#  LEER WIDGET MATCHSCORERLIVE
 # ══════════════════════════════════════════════
 
 def leer_widget(tid, year, day):
-    """Lee el widget de matchscorerlive para un torneo y día."""
     url = f"https://widget.matchscorerlive.com/screen/resultsbyday/FIP-{year}-{tid}/{day}?t=tol"
     return leer_url(url)
 
 def parsear_widget(html):
-    """
-    Parsea el HTML del widget matchscorerlive.
-    Estructura: tabla con header (pista/ronda) + team1 + team2 + summary
-    Devuelve lista de partidos con argentinos.
-    """
     soup = BeautifulSoup(html, "html.parser")
     partidos = []
 
-    # Cada partido es una <table class="w-100 mb-3">
     for tabla in soup.find_all("table", class_="w-100"):
         rows = tabla.find_all("tr")
         if len(rows) < 3: continue
 
-        # Extraer ronda del header
         ronda = ""
         for tr in rows:
-            div_ronda = tr.find("div")
-            if div_ronda:
-                ronda = div_ronda.get_text(strip=True)
-                break
+            div = tr.find("div")
+            if div:
+                t = div.get_text(strip=True)
+                if t and t not in ["", " "]:
+                    ronda = t; break
 
-        # Extraer estado del summary
         summary_txt = ""
         for tr in rows:
             if "summary" in tr.get("class", []):
-                summary_txt = tr.get_text(" ", strip=True).lower()
-                break
+                summary_txt = tr.get_text(" ", strip=True).lower(); break
 
         completado = "completed" in summary_txt
-        en_vivo    = "live" in summary_txt
 
-        if not completado and not en_vivo:
-            continue  # partido no empezado
-
-        # Extraer equipos (team rows)
         team_rows = [tr for tr in rows if tr.find("div", class_="player-names")]
         if len(team_rows) < 2: continue
 
         def leer_equipo(tr):
             jugadores = []
-            dobles = tr.find_all("div", class_="d-flex")
-            for div in dobles:
+            for div in tr.find_all("div", class_="d-flex"):
                 img = div.find("img", class_="flags")
                 if not img: continue
-                src = img.get("src", "")
-                es_arg = "ARG" in src
-                spans = div.find_all("span")
-                nombre = " ".join(s.get_text(strip=True) for s in spans
-                                  if s.get_text(strip=True) and "separator" not in s.get("class",[])).strip()
+                es_arg = "ARG" in img.get("src", "")
+                spans = [s for s in div.find_all("span")
+                         if "separator" not in s.get("class", []) and s.get_text(strip=True)]
+                nombre = " ".join(s.get_text(strip=True) for s in spans).strip()
                 if nombre:
                     jugadores.append({"nombre": nombre, "es_arg": es_arg})
             return jugadores
 
         def leer_sets(tr):
-            sets = []
-            for td in tr.find_all("td", class_="set"):
-                t = td.get_text(strip=True)
-                if t and t != "-": sets.append(t)
-            return sets
+            return [td.get_text(strip=True) for td in tr.find_all("td", class_="set")
+                    if td.get_text(strip=True) and td.get_text(strip=True) != "-"]
 
         eq1 = leer_equipo(team_rows[0])
         eq2 = leer_equipo(team_rows[1])
-        sets1 = leer_sets(team_rows[0])
-        sets2 = leer_sets(team_rows[1])
-
         if len(eq1) < 2 or len(eq2) < 2: continue
 
         hay_arg = any(j["es_arg"] for j in eq1 + eq2)
         if not hay_arg: continue
 
-        # Ganador: team que tiene set-completed sin set-lost
-        def es_ganador(tr):
+        sets1 = leer_sets(team_rows[0])
+        sets2 = leer_sets(team_rows[1])
+
+        def es_gan(tr):
             for td in tr.find_all("td", class_="set"):
-                clases = td.get("class", [])
-                if "set-completed" in clases and "set-lost" not in clases:
+                c = td.get("class", [])
+                if "set-completed" in c and "set-lost" not in c:
                     return True
             return False
 
-        gan_es_1 = es_ganador(team_rows[0])
+        gan_es_1 = es_gan(team_rows[0])
         gan = eq1 if gan_es_1 else eq2
         per = eq2 if gan_es_1 else eq1
-        s_gan = sets1 if gan_es_1 else sets2
-        s_per = sets2 if gan_es_1 else sets1
+        s_g = sets1 if gan_es_1 else sets2
+        s_p = sets2 if gan_es_1 else sets1
 
-        marcador_sets = []
-        for i in range(min(3, max(len(s_gan), len(s_per)))):
-            g = s_gan[i] if i < len(s_gan) else "?"
-            p = s_per[i] if i < len(s_per) else "?"
-            marcador_sets.append(f"{g}-{p}")
-        marcador = " / ".join(marcador_sets)
+        sets_txt = []
+        for i in range(min(3, max(len(s_g), len(s_p)))):
+            g = s_g[i] if i < len(s_g) else "?"
+            p = s_p[i] if i < len(s_p) else "?"
+            sets_txt.append(f"{g}-{p}")
+        marcador = " / ".join(sets_txt)
 
         partidos.append({
-            "gan": gan, "per": per,
-            "marcador": marcador,
-            "ronda": ronda,
-            "completado": completado,
-            "en_vivo": en_vivo,
+            "gan": gan, "per": per, "marcador": marcador,
+            "ronda": ronda, "completado": completado,
             "id": f"{gan[0]['nombre']}_{per[0]['nombre']}",
         })
 
     return partidos
-
-# ══════════════════════════════════════════════
-#  ORDEN DEL DÍA (PDF)
-# ══════════════════════════════════════════════
 
 def url_pdf(fecha):
     return (f"https://www.padelfip.com/wp-content/uploads/2025/12/"
@@ -316,10 +311,6 @@ def tarea_orden_dia():
     if tg_enviar_pdf(pdf_bytes, nombre, caption):
         marcar_hoy(tid); print("✅ PDF enviado")
 
-# ══════════════════════════════════════════════
-#  MONITOREO
-# ══════════════════════════════════════════════
-
 def monitorear():
     pub = cargar_pub()
     torneos = detectar_torneos()
@@ -327,32 +318,25 @@ def monitorear():
 
     for torneo in torneos:
         print(f"📂 {torneo['nombre'][:40]}")
-        tid, t_year = obtener_id_torneo(torneo["url"])
-        if not tid:
-            print(f"   ⚠️ Sin id matchscorerlive")
-            continue
+        tid, t_year = obtener_id_via_endpoint(torneo["url"])
+        if not tid: continue
         t_year = t_year or year
-        print(f"   🆔 id={tid}")
 
         bandera = bandera_de(torneo["nombre"] + " " + torneo["url"])
         cat     = categoria_fip(torneo["nombre"])
         ciudad  = ciudad_de(torneo["nombre"])
 
-        # Probar días del 1 al 10 (cubre todos los torneos)
         for day in range(1, 11):
             html = leer_widget(tid, t_year, day)
-            if not html or len(html) < 200: continue
+            if not html or len(html) < 500: continue
 
             try:
                 partidos = parsear_widget(html)
             except Exception as e:
-                print(f"   ⚠️ día {day}: {e}"); continue
-
-            if partidos:
-                print(f"   día {day}: {len(partidos)} partidos con arg")
+                continue
 
             for p in partidos:
-                if not p["completado"]: continue  # solo publicar completados
+                if not p["completado"]: continue
                 pid = f"{torneo['url']}_{p['id']}"
                 if pid in pub: continue
 
@@ -378,18 +362,15 @@ def monitorear():
                        f"{LINK_WEB}")
                 if tg_enviar(msg):
                     guardar_pub(pid); time.sleep(3)
-
-# ══════════════════════════════════════════════
-#  LOOP
-# ══════════════════════════════════════════════
+                    print(f"   ✅ Publicado: {p['gan'][0]['nombre']}/{p['gan'][1]['nombre']}")
 
 def ciclo():
     print("="*50)
-    print("🤖 BOT TELEGRAM PADEL ARGENTINA — v14")
+    print("🤖 BOT TELEGRAM PADEL ARGENTINA — v15")
     print(f"📅 {hora_arg().strftime('%d/%m/%Y %H:%M')}")
     print("="*50)
-    tg_enviar("🤖 <b>Bot Padel Argentina v14 ✅</b>\n\n"
-              "📡 Fuente: matchscorerlive.com\n"
+    tg_enviar("🤖 <b>Bot Padel Argentina v15 ✅</b>\n\n"
+              "📡 matchscorerlive + detección automática de id\n"
               "🎾 Resultados con marcador y ronda\n"
               "🇦🇷 Todos los FIP + Premier\n\n"
               f"{LINK_WEB}")
