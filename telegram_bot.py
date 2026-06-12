@@ -118,6 +118,7 @@ def tg_enviar_pdf(pdf_bytes, nombre, caption):
 
 def detectar_torneos():
     html = leer_url("https://www.padelfip.com/es/")
+    print(f"   🔬 home FIP: {len(html) if html else 0} chars")
     if not html: return []
     soup = BeautifulSoup(html, "html.parser")
     torneos, vistos = [], set()
