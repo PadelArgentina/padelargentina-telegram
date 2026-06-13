@@ -7,7 +7,7 @@ import pytz
 from bs4 import BeautifulSoup
 from datetime import datetime, timedelta
 
-TELEGRAM_TOKEN   = os.environ.get("TELEGRAM_TOKEN")
+TELEGRAM_TOKEN   = os.environ.get("TELEGRAM_TOKEN")h
 TELEGRAM_CHAT_ID = os.environ.get("TELEGRAM_CHAT_ID")
 ARGENTINA_TZ     = pytz.timezone("America/Argentina/Buenos_Aires")
 INTERVALO_MIN    = 5
@@ -202,7 +202,7 @@ def parsear_widget(html):
 
         sets1 = leer_sets(team_rows[0])
         sets2 = leer_sets(team_rows[1])
-        gan_es_1 = es_ganador(team_rows[0])
+        gan_es_1 = bool(team_rows[0].find("img", src=lambda s: s and "ballg" in s))
 
         gan = eq1 if gan_es_1 else eq2
         per = eq2 if gan_es_1 else eq1
