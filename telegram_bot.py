@@ -22,32 +22,25 @@ MESES_EN = {1:"JANUARY",2:"FEBRUARY",3:"MARCH",4:"APRIL",5:"MAY",6:"JUNE",
 
 # ══════════════════════════════════════════════
 #  TORNEOS ACTIVOS — actualizar cada lunes
-#  Para obtener el id: abrir la página del torneo,
-#  F12 → Network → "Orden de juego" → buscar "screen"
-#  La URL tiene: widget.matchscorerlive.com/screen/.../FIP-2026-XXXX/
+#  Cómo obtener el id: abrir la página del torneo,
+#  F12 → Network → pestaña "Orden de juego" → buscar "screen"
+#  URL: widget.matchscorerlive.com/screen/.../FIP-2026-XXXX/
 #  XXXX es el id
 # ══════════════════════════════════════════════
 TORNEOS = [
-    {"nombre": "PREMIER PADEL P1 VALENCIA",   "ciudad": "Valencia",  "bandera": "🇪🇸", "cat": "PREMIER PADEL P1", "id": "2403", "year": "2026"},
-    {"nombre": "FIP BRONZE ESLOVENIA",         "ciudad": "Eslovenia", "bandera": "🇸🇮", "cat": "FIP BRONZE",       "id": "2404", "year": "2026"},
-    {"nombre": "FIP SILVER PALERMO",           "ciudad": "Palermo",   "bandera": "🇮🇹", "cat": "FIP SILVER",       "id": "2606", "year": "2026"},
-    {"nombre": "FIP GOLD SHANGHAI",            "ciudad": "Shanghai",  "bandera": "🇨🇳", "cat": "FIP GOLD",         "id": "2412", "year": "2026"},
-    {"nombre": "FIP BRONZE LANZAROTE",         "ciudad": "Lanzarote", "bandera": "🇪🇸", "cat": "FIP BRONZE",       "id": "2411", "year": "2026"},
+    {"nombre":"PREMIER PADEL P1 VALENCIA", "ciudad":"Valencia",  "bandera":"🇪🇸", "cat":"PREMIER PADEL P1", "id":"2403", "year":"2026", "totalday":9},
+    {"nombre":"FIP BRONZE ESLOVENIA",       "ciudad":"Eslovenia", "bandera":"🇸🇮", "cat":"FIP BRONZE",       "id":"2404", "year":"2026", "totalday":6},
+    {"nombre":"FIP SILVER PALERMO",         "ciudad":"Palermo",   "bandera":"🇮🇹", "cat":"FIP SILVER",       "id":"2606", "year":"2026", "totalday":5},
+    {"nombre":"FIP GOLD SHANGHAI",          "ciudad":"Shanghai",  "bandera":"🇨🇳", "cat":"FIP GOLD",         "id":"2412", "year":"2026", "totalday":5},
+    {"nombre":"FIP BRONZE LANZAROTE",       "ciudad":"Lanzarote", "bandera":"🇪🇸", "cat":"FIP BRONZE",       "id":"2411", "year":"2026", "totalday":4},
 ]
 
 RONDAS_ES = {
-    "quarterfinals": "CUARTOS DE FINAL",
-    "semifinals":    "SEMIFINAL",
-    "final":         "FINAL",
-    "round of 16":   "OCTAVOS",
-    "round of 32":   "R32",
-    "round of 64":   "R64",
-    "qualifying":    "QUALY",
+    "quarterfinals":"CUARTOS DE FINAL", "semifinals":"SEMIFINAL", "final":"FINAL",
+    "round of 16":"OCTAVOS", "round of 32":"R32", "round of 64":"R64",
+    "qualifying":"QUALY", "menq1":"QUALIFYING", "womenq1":"QUALIFYING",
+    "men":"", "women":"",
 }
-
-# ══════════════════════════════════════════════
-#  HELPERS
-# ══════════════════════════════════════════════
 
 def hora_arg():
     return datetime.now(ARGENTINA_TZ)
@@ -77,14 +70,10 @@ def marcar_hoy(t):
     guardar_json(ARCHIVO_ESTADO, e)
 
 def ronda_es(r):
-    t = r.lower()
+    t = r.lower().strip()
     for k, v in RONDAS_ES.items():
         if k in t: return v
     return r.upper()
-
-# ══════════════════════════════════════════════
-#  LECTOR WEB
-# ══════════════════════════════════════════════
 
 def leer_url(url, espera_pdf=False):
     headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120.0.0.0 Safari/537.36"}
@@ -99,16 +88,12 @@ def leer_url(url, espera_pdf=False):
         except: pass
     return None
 
-# ══════════════════════════════════════════════
-#  TELEGRAM
-# ══════════════════════════════════════════════
-
 def tg_enviar(texto):
     try:
         r = requests.post(
             f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage",
-            json={"chat_id": TELEGRAM_CHAT_ID, "text": texto,
-                  "parse_mode": "HTML", "disable_web_page_preview": True},
+            json={"chat_id":TELEGRAM_CHAT_ID,"text":texto,
+                  "parse_mode":"HTML","disable_web_page_preview":True},
             timeout=15)
         ok = r.status_code == 200
         print(f"{'✅' if ok else '❌'} TG: {texto[:50]}...")
@@ -121,66 +106,76 @@ def tg_enviar_pdf(pdf_bytes, nombre, caption):
     try:
         r = requests.post(
             f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendDocument",
-            data={"chat_id": TELEGRAM_CHAT_ID, "caption": caption, "parse_mode": "HTML"},
-            files={"document": (nombre, pdf_bytes, "application/pdf")},
-            timeout=40)
+            data={"chat_id":TELEGRAM_CHAT_ID,"caption":caption,"parse_mode":"HTML"},
+            files={"document":(nombre,pdf_bytes,"application/pdf")},timeout=40)
         return r.status_code == 200
     except: return False
 
-# ══════════════════════════════════════════════
-#  PARSER DEL WIDGET MATCHSCORERLIVE
-# ══════════════════════════════════════════════
+def dia_actual_torneo(torneo):
+    """Obtiene el día actual del torneo via endpoint FIP."""
+    try:
+        url = (f"https://www.padelfip.com/wp-content/themes/padelfiptheme/"
+               f"template-parts/event/endpoint/get-result-data.php"
+               f"?year={torneo['year']}&id={torneo['id']}"
+               f"&day=1&totalday={torneo['totalday']}&widget=resultsbyday")
+        r = requests.get(url, headers={"User-Agent":"Mozilla/5.0"}, timeout=10)
+        if r.status_code == 200:
+            data = r.json()
+            dia = data.get("usedDay", 0)
+            if dia > 0:
+                return dia
+    except: pass
+    return None
 
 def parsear_widget(html):
     """
-    Parsea el HTML del widget matchscorerlive.
-    Estructura confirmada con HTML real:
-    - <img class="flags" src="/images/flags/ARG.jpg"> para argentinos
-    - <td class="set set-completed"> para el ganador
-    - <span class="summary">...</span> con "completed" o "live"
+    Parser definitivo basado en el HTML real de matchscorerlive.
+    Estructura: table.w-100 > tr (header) + tr (team1) + tr (team2) + tr.summary
+    Cada equipo: div.player-names > div.double > div.d-flex (uno por jugador)
+    Cada jugador: img.flags + div.ml-2 > span (inicial) + span (apellido)
     """
     soup = BeautifulSoup(html, "html.parser")
     partidos = []
 
     for tabla in soup.find_all("table", class_="w-100"):
-        rows = tabla.find_all("tr")
+        rows = tabla.find_all("tr", recursive=False)
         if len(rows) < 3: continue
 
-        # Ronda del header
+        # Ronda: buscar en el header
         ronda = ""
-        for tr in rows:
-            div = tr.find("div")
-            if div:
-                t = div.get_text(strip=True)
-                if t: ronda = t; break
+        header = rows[0]
+        for div in header.find_all("div"):
+            t = div.get_text(strip=True)
+            if t and len(t) > 2:
+                ronda = t; break
 
-        # Estado (completed / live)
+        # Estado: buscar en summary
         summary_txt = ""
         for tr in rows:
             if "summary" in tr.get("class", []):
                 summary_txt = tr.get_text(" ", strip=True).lower(); break
+        if "completed" not in summary_txt:
+            continue
 
-        completado = "completed" in summary_txt
-        if not completado: continue  # solo publicar terminados
-
-        # Filas de equipos
+        # Filas de equipos: las que tienen div.player-names
         team_rows = [tr for tr in rows if tr.find("div", class_="player-names")]
         if len(team_rows) < 2: continue
 
         def leer_equipo(tr):
+            """Lee los jugadores de un equipo desde el tr."""
             jugadores = []
-            for div in tr.find_all("div", class_="d-flex"):
-                img = div.find("img", class_="flags")
+            double = tr.find("div", class_="double")
+            if not double: return jugadores
+            for div_jug in double.find_all("div", class_="d-flex"):
+                img = div_jug.find("img", class_="flags")
                 if not img: continue
                 es_arg = "ARG" in img.get("src", "")
-                # Solo tomar el div de nombre (hermano del div de la bandera)
-                nombre_div = div.find("div", class_="ml-2")
-                if not nombre_div:
-                    nombre_div = div
-                spans = [s for s in nombre_div.find_all("span")
+                # Nombre en div.ml-2
+                ml2 = div_jug.find("div", class_="ml-2")
+                if not ml2: continue
+                spans = [s for s in ml2.find_all("span")
                          if "separator" not in s.get("class", [])
                          and s.get_text(strip=True)]
-                # Máximo 2 spans: inicial + apellido
                 nombre = " ".join(s.get_text(strip=True) for s in spans[:2]).strip()
                 if nombre:
                     jugadores.append({"nombre": nombre, "es_arg": es_arg})
@@ -222,17 +217,11 @@ def parsear_widget(html):
         marcador = " / ".join(sets_txt)
 
         partidos.append({
-            "gan": gan, "per": per,
-            "marcador": marcador,
-            "ronda": ronda,
+            "gan": gan, "per": per, "marcador": marcador, "ronda": ronda,
             "id": f"{gan[0]['nombre']}_{per[0]['nombre']}",
         })
 
     return partidos
-
-# ══════════════════════════════════════════════
-#  ORDEN DEL DÍA (PDF)
-# ══════════════════════════════════════════════
 
 def url_pdf(fecha):
     return (f"https://www.padelfip.com/wp-content/uploads/2025/12/"
@@ -253,38 +242,22 @@ def tarea_orden_dia():
     if tg_enviar_pdf(pdf_bytes, nombre, caption):
         marcar_hoy(tid); print("✅ PDF enviado")
 
-# ══════════════════════════════════════════════
-#  MONITOREO
-# ══════════════════════════════════════════════
-
 def monitorear():
     pub = cargar_pub()
 
-    # Fecha de hoy para filtrar solo partidos nuevos
-    hoy_str = hora_arg().strftime("%Y-%m-%d")
-
     for torneo in TORNEOS:
         print(f"📂 {torneo['nombre']}")
+
+        # Obtener día actual del torneo
+        dia_hoy = dia_actual_torneo(torneo)
+        if dia_hoy:
+            dias = [dia_hoy]  # solo el día de hoy
+            print(f"   📅 día actual del torneo: {dia_hoy}")
+        else:
+            dias = list(range(1, torneo["totalday"] + 1))
+
         encontrados = 0
-
-        # Calcular día actual del torneo usando get-result-data.php
-        # Si falla, probar los últimos 3 días
-        dias_a_probar = list(range(1, 11))
-        try:
-            ep = (f"https://www.padelfip.com/wp-content/themes/padelfiptheme/"
-                  f"template-parts/event/endpoint/get-result-data.php"
-                  f"?year={torneo['year']}&id={torneo['id']}&day=1&totalday=10&widget=resultsbyday")
-            resp = requests.get(ep, headers={"User-Agent":"Mozilla/5.0"}, timeout=10)
-            if resp.status_code == 200:
-                data = resp.json()
-                dia_actual = data.get("usedDay", 0)
-                if dia_actual > 0:
-                    # Solo procesar día actual y el anterior
-                    dias_a_probar = [max(1, dia_actual-1), dia_actual]
-        except:
-            pass
-
-        for day in dias_a_probar:
+        for day in dias:
             url = (f"https://widget.matchscorerlive.com/screen/resultsbyday"
                    f"/FIP-{torneo['year']}-{torneo['id']}/{day}?t=tol")
             html = leer_url(url)
@@ -312,7 +285,7 @@ def monitorear():
                 else:
                     cab = f"🎾🇦🇷 <b>Derrota argentina en el {torneo['cat']} de {torneo['ciudad']}</b>"
 
-                ronda_linea   = f" | {ronda_txt}" if ronda_txt else ""
+                ronda_linea    = f" | {ronda_txt}" if ronda_txt else ""
                 marcador_linea = f"\n🎯 {p['marcador']}" if p["marcador"] else ""
 
                 msg = (f"{cab}\n"
@@ -323,26 +296,21 @@ def monitorear():
                        f"{LINK_WEB}")
                 if tg_enviar(msg):
                     guardar_pub(pid)
-                    guardar_pub(f"{pid}_fecha_{hoy_str}")
-                    print(f"   ✅ {p['gan'][0]['nombre']}/{p['gan'][1]['nombre']} vs {p['per'][0]['nombre']}/{p['per'][1]['nombre']}")
+                    print(f"   ✅ {p['gan'][0]['nombre']}/{p['gan'][1]['nombre']}")
                     time.sleep(3)
 
-        print(f"   → {encontrados} partidos con arg")
-
-# ══════════════════════════════════════════════
-#  LOOP
-# ══════════════════════════════════════════════
+        print(f"   → {encontrados} con arg")
 
 def ciclo():
     print("="*50)
-    print("🤖 BOT TELEGRAM PADEL ARGENTINA — v16")
+    print("🤖 BOT TELEGRAM PADEL ARGENTINA — v17")
     print(f"📅 {hora_arg().strftime('%d/%m/%Y %H:%M')}")
     print("="*50)
     tg_enviar(
-        "🤖 <b>Bot Padel Argentina v16 ✅</b>\n\n"
-        "📡 Fuente: matchscorerlive.com\n"
-        "🎾 Resultados con marcador y ronda\n"
-        "🇦🇷 Valencia P1 · Eslovenia · Palermo · Shanghai · Lanzarote\n\n"
+        "🤖 <b>Bot Padel Argentina v17 ✅</b>\n\n"
+        "📡 matchscorerlive | nombres corregidos\n"
+        "🎾 Solo resultados del día actual\n"
+        "🇦🇷 Valencia · Eslovenia · Palermo · Shanghai · Lanzarote\n\n"
         f"{LINK_WEB}"
     )
     contador = 0
