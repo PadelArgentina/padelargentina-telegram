@@ -173,10 +173,15 @@ def parsear_widget(html):
                 img = div.find("img", class_="flags")
                 if not img: continue
                 es_arg = "ARG" in img.get("src", "")
-                spans = [s for s in div.find_all("span")
+                # Solo tomar el div de nombre (hermano del div de la bandera)
+                nombre_div = div.find("div", class_="ml-2")
+                if not nombre_div:
+                    nombre_div = div
+                spans = [s for s in nombre_div.find_all("span")
                          if "separator" not in s.get("class", [])
                          and s.get_text(strip=True)]
-                nombre = " ".join(s.get_text(strip=True) for s in spans).strip()
+                # Máximo 2 spans: inicial + apellido
+                nombre = " ".join(s.get_text(strip=True) for s in spans[:2]).strip()
                 if nombre:
                     jugadores.append({"nombre": nombre, "es_arg": es_arg})
             return jugadores
@@ -255,11 +260,31 @@ def tarea_orden_dia():
 def monitorear():
     pub = cargar_pub()
 
+    # Fecha de hoy para filtrar solo partidos nuevos
+    hoy_str = hora_arg().strftime("%Y-%m-%d")
+
     for torneo in TORNEOS:
         print(f"📂 {torneo['nombre']}")
         encontrados = 0
 
-        for day in range(1, 11):
+        # Calcular día actual del torneo usando get-result-data.php
+        # Si falla, probar los últimos 3 días
+        dias_a_probar = list(range(1, 11))
+        try:
+            ep = (f"https://www.padelfip.com/wp-content/themes/padelfiptheme/"
+                  f"template-parts/event/endpoint/get-result-data.php"
+                  f"?year={torneo['year']}&id={torneo['id']}&day=1&totalday=10&widget=resultsbyday")
+            resp = requests.get(ep, headers={"User-Agent":"Mozilla/5.0"}, timeout=10)
+            if resp.status_code == 200:
+                data = resp.json()
+                dia_actual = data.get("usedDay", 0)
+                if dia_actual > 0:
+                    # Solo procesar día actual y el anterior
+                    dias_a_probar = [max(1, dia_actual-1), dia_actual]
+        except:
+            pass
+
+        for day in dias_a_probar:
             url = (f"https://widget.matchscorerlive.com/screen/resultsbyday"
                    f"/FIP-{torneo['year']}-{torneo['id']}/{day}?t=tol")
             html = leer_url(url)
@@ -298,6 +323,7 @@ def monitorear():
                        f"{LINK_WEB}")
                 if tg_enviar(msg):
                     guardar_pub(pid)
+                    guardar_pub(f"{pid}_fecha_{hoy_str}")
                     print(f"   ✅ {p['gan'][0]['nombre']}/{p['gan'][1]['nombre']} vs {p['per'][0]['nombre']}/{p['per'][1]['nombre']}")
                     time.sleep(3)
 
