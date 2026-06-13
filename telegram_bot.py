@@ -115,28 +115,25 @@ def dia_actual_widget(torneo):
     html = leer_url(url)
     if not html: return None
     soup = BeautifulSoup(html, "html.parser")
-
     hoy = hora_arg()
     meses_cortos = {
         "JAN":1,"FEB":2,"MAR":3,"APR":4,"MAY":5,"JUN":6,
         "JUL":7,"AUG":8,"SEP":9,"OCT":10,"NOV":11,"DEC":12
     }
-
     # Primero buscar botón active
     active = soup.find("div", class_="play-day-button active")
     if active:
         parent = active.find_parent("a")
         if parent:
             href = parent.get("href", "")
-            m = re.search(r'/(\d+)\?', href)
+            m = re.search(r'/(d+)?', href)
             if m: return int(m.group(1))
-
     # Si no hay active, buscar el botón que coincide con la fecha de hoy
     mejor_dia = None
     mejor_diff = 999
     for a in soup.find_all("a", href=True):
         href = a.get("href", "")
-        m = re.search(r'/(\d+)\?', href)
+        m = re.search(r'/(d+)?', href)
         if not m: continue
         num_dia = int(m.group(1))
         btn = a.find("div", class_="play-day-button")
@@ -154,17 +151,14 @@ def dia_actual_widget(torneo):
                         mejor_diff = diff
                         mejor_dia = num_dia
             except: pass
-
     if mejor_dia:
         return mejor_dia
-
     # Fallback: último día disponible
     buttons = soup.find_all("a", href=re.compile(r'/screen/resultsbyday/'))
     if buttons:
         last = buttons[-1].get("href", "")
-        m = re.search(r'/(\d+)\?', last)
+        m = re.search(r'/(d+)?', last)
         if m: return int(m.group(1))
-
     return None
 
 def parsear_widget(html):
@@ -176,11 +170,9 @@ def parsear_widget(html):
     """
     soup = BeautifulSoup(html, "html.parser")
     partidos = []
-
     for tabla in soup.find_all("table", class_="w-100"):
         rows = tabla.find_all("tr", recursive=False)
         if len(rows) < 3: continue
-
         # Ronda del header
         ronda = ""
         header = rows[0]
@@ -192,16 +184,13 @@ def parsear_widget(html):
                 t = div.get_text(strip=True)
                 if t and t not in ("Men", "Women"):
                     ronda = t; break
-
         # Estado: solo COMPLETED
         summary = next((tr for tr in rows if "summary" in tr.get("class", [])), None)
         if not summary: continue
         if "completed" not in summary.get_text().lower(): continue
-
         # Filas de equipos
         team_rows = [tr for tr in rows if tr.find("div", class_="player-names")]
         if len(team_rows) < 2: continue
-
         def leer_equipo(tr):
             """
             Lee jugadores y detecta si el equipo es ganador.
@@ -226,7 +215,6 @@ def parsear_widget(html):
                 if nombre:
                     jugadores.append({"nombre": nombre, "es_arg": es_arg})
             return jugadores, es_ganador
-
         def sets_ganados(tr):
             """Sets que ganó este equipo: td.set sin set-lost, con número."""
             resultado = []
@@ -236,7 +224,6 @@ def parsear_widget(html):
                 if t and t != "-" and "set-lost" not in clases:
                     resultado.append(t)
             return resultado
-
         def sets_perdidos(tr):
             """Sets que perdió este equipo: td.set con set-lost, con número."""
             resultado = []
@@ -246,14 +233,11 @@ def parsear_widget(html):
                 if t and t != "-" and "set-lost" in clases:
                     resultado.append(t)
             return resultado
-
         eq1, gan1 = leer_equipo(team_rows[0])
         eq2, gan2 = leer_equipo(team_rows[1])
-
         if len(eq1) < 2 or len(eq2) < 2: continue
         hay_arg = any(j["es_arg"] for j in eq1 + eq2)
         if not hay_arg: continue
-
         # Ganador es el que tiene 'winner'
         if gan1:
             gan, per = eq1, eq2
@@ -263,25 +247,21 @@ def parsear_widget(html):
             tr_gan, tr_per = team_rows[1], team_rows[0]
         else:
             continue  # No se puede determinar ganador
-
         # Marcador: sets ganados por el ganador vs sets perdidos por el ganador
         s_gan = sets_ganados(tr_gan)  # sets que ganó el ganador
         s_per = sets_perdidos(tr_gan)  # sets que perdió el ganador (= sets que ganó el perdedor)
-
         sets_txt = []
         for i in range(max(len(s_gan), len(s_per))):
             g = s_gan[i] if i < len(s_gan) else "?"
             p = s_per[i] if i < len(s_per) else "?"
             sets_txt.append(f"{g}-{p}")
         marcador = " / ".join(sets_txt)
-
         partidos.append({
             "gan": gan, "per": per,
             "marcador": marcador,
             "ronda": ronda,
             "id": f"{gan[0]['nombre']}_{per[0]['nombre']}",
         })
-
     return partidos
 
 def url_pdf(fecha):
@@ -297,65 +277,65 @@ def tarea_orden_dia():
     if not pdf_bytes: return
     dia_en = DIAS_EN[manana.weekday()].capitalize()
     nombre = f"orden-de-juego-{manana.day}-{MESES_EN[manana.month].lower()}.pdf"
-    caption = (f"🗓️ <b>ORDEN DE JUEGO — {dia_en} {manana.strftime('%d/%m/%Y')}</b>\n"
-               f"🏟️ <b>PREMIER PADEL P1 VALENCIA</b> 🇪🇸\n\n"
-               f"📋 Todos los partidos, horarios y pistas.\n\n{LINK_WEB}")
+    caption = (f"🗓️ <b>ORDEN DE JUEGO — {dia_en} {manana.strftime('%d/%m/%Y')}</b>
+"
+               f"🏟️ <b>PREMIER PADEL P1 VALENCIA</b> 🇪🇸
+
+"
+               f"📋 Todos los partidos, horarios y pistas.
+
+{LINK_WEB}")
     if tg_enviar_pdf(pdf_bytes, nombre, caption):
         marcar_hoy(tid)
         print("✅ PDF enviado")
 
 def monitorear():
     pub = cargar_pub()
-
     for torneo in TORNEOS:
         print(f"📂 {torneo['nombre']}")
-
         # Obtener día actual del widget
         dia = dia_actual_widget(torneo)
         if not dia:
             print(f"   ⚠️ No se pudo determinar el día actual")
             continue
         print(f"   📅 día {dia}")
-
         url = (f"https://widget.matchscorerlive.com/screen/resultsbyday"
                f"/FIP-{torneo['year']}-{torneo['id']}/{dia}?t=tol")
         html = leer_url(url)
         if not html or len(html) < 500:
             print(f"   ⚠️ Widget no disponible")
             continue
-
         try:
             partidos = parsear_widget(html)
         except Exception as e:
             print(f"   ⚠️ {e}"); continue
-
         print(f"   → {len(partidos)} con arg")
-
         for p in partidos:
             pid = f"{torneo['id']}_{p['id']}"
             if pid in pub: continue
-
             def fmt(j):
                 return f"🇦🇷 {j['nombre']}" if j['es_arg'] else j['nombre']
-
             gan_arg = any(j["es_arg"] for j in p["gan"])
             ronda_txt = ronda_es(p["ronda"])
-
             if gan_arg:
                 cab = "🎾🇦🇷 <b>VICTORIA ARGENTINA</b>"
             else:
                 cab = f"🎾🇦🇷 <b>Derrota argentina en el {torneo['cat']} de {torneo['ciudad']}</b>"
-
             ronda_linea    = f" | {ronda_txt}" if ronda_txt else ""
-            marcador_linea = f"\n🎯 {p['marcador']}" if p["marcador"] else ""
+            marcador_linea = f"
+🎯 {p['marcador']}" if p["marcador"] else ""
+            msg = (f"{cab}
+"
+                   f"{torneo['bandera']} <b>{torneo['nombre']}</b>{ronda_linea}
 
-            msg = (f"{cab}\n"
-                   f"{torneo['bandera']} <b>{torneo['nombre']}</b>{ronda_linea}\n\n"
-                   f"✅ {fmt(p['gan'][0])} / {fmt(p['gan'][1])}\n"
+"
+                   f"✅ {fmt(p['gan'][0])} / {fmt(p['gan'][1])}
+"
                    f"❌ {fmt(p['per'][0])} / {fmt(p['per'][1])}"
-                   f"{marcador_linea}\n\n"
-                   f"{LINK_WEB}")
+                   f"{marcador_linea}
 
+"
+                   f"{LINK_WEB}")
             if tg_enviar(msg):
                 guardar_pub(pid)
                 print(f"   ✅ {p['gan'][0]['nombre']}/{p['gan'][1]['nombre']}")
@@ -367,15 +347,22 @@ def ciclo():
     print(f"📅 {hora_arg().strftime('%d/%m/%Y %H:%M')}")
     print("="*50)
     tg_enviar(
-        "🤖 <b>Bot Padel Argentina v19 ✅</b>\n\n"
-        "📡 matchscorerlive | ganador por clase 'winner'\n"
-        "🎾 Solo día actual | marcador correcto\n"
-        "🇦🇷 Valencia · Eslovenia · Palermo · Shanghai · Lanzarote\n\n"
+        "🤖 <b>Bot Padel Argentina v19 ✅</b>
+
+"
+        "📡 matchscorerlive | ganador por clase 'winner'
+"
+        "🎾 Solo día actual | marcador correcto
+"
+        "🇦🇷 Valencia · Eslovenia · Palermo · Shanghai · Lanzarote
+
+"
         f"{LINK_WEB}"
     )
     contador = 0
     while True:
-        print(f"\n🔍 [{hora_arg().strftime('%H:%M:%S')}] Ciclo {contador+1}")
+        print(f"
+🔍 [{hora_arg().strftime('%H:%M:%S')}] Ciclo {contador+1}")
         try:
             tarea_orden_dia()
             monitorear()
