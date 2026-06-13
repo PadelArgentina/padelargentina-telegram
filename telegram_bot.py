@@ -107,33 +107,64 @@ def tg_enviar_pdf(pdf_bytes, nombre, caption):
 
 def dia_actual_widget(torneo):
     """
-    Lee el widget y busca el día activo (play-day-button active).
-    Es el método más confiable porque usa el mismo HTML que vemos en pantalla.
+    Lee el selector de días del widget y encuentra el día correspondiente a HOY.
+    Compara la fecha de cada botón con la fecha actual argentina.
+    Si no hay coincidencia exacta, usa el último día disponible.
     """
-    # Probar con día 1 para obtener el selector de días
     url = f"https://widget.matchscorerlive.com/screen/resultsbyday/FIP-{torneo['year']}-{torneo['id']}/1?t=tol"
     html = leer_url(url)
     if not html: return None
     soup = BeautifulSoup(html, "html.parser")
-    # El día activo tiene clase "active" en play-day-button
+
+    hoy = hora_arg()
+    meses_cortos = {
+        "JAN":1,"FEB":2,"MAR":3,"APR":4,"MAY":5,"JUN":6,
+        "JUL":7,"AUG":8,"SEP":9,"OCT":10,"NOV":11,"DEC":12
+    }
+
+    # Primero buscar botón active
     active = soup.find("div", class_="play-day-button active")
-    if not active:
-        # Buscar el último día disponible
-        buttons = soup.find_all("div", class_="play-day-button")
-        if buttons:
-            # El último botón es el día más reciente
-            parent = buttons[-1].find_parent("a")
-            if parent:
-                href = parent.get("href", "")
-                m = re.search(r'/(\d+)\?', href)
-                if m: return int(m.group(1))
-        return None
-    # Obtener el número del día desde el href del padre
-    parent = active.find_parent("a")
-    if parent:
-        href = parent.get("href", "")
+    if active:
+        parent = active.find_parent("a")
+        if parent:
+            href = parent.get("href", "")
+            m = re.search(r'/(\d+)\?', href)
+            if m: return int(m.group(1))
+
+    # Si no hay active, buscar el botón que coincide con la fecha de hoy
+    mejor_dia = None
+    mejor_diff = 999
+    for a in soup.find_all("a", href=True):
+        href = a.get("href", "")
         m = re.search(r'/(\d+)\?', href)
+        if not m: continue
+        num_dia = int(m.group(1))
+        btn = a.find("div", class_="play-day-button")
+        if not btn: continue
+        fecha_txt = btn.get_text(" ", strip=True)  # ej: "JUN 14 SUN"
+        partes = fecha_txt.split()
+        if len(partes) >= 2:
+            try:
+                mes_txt = partes[0].upper()[:3]
+                dia_num = int(partes[1])
+                mes_num = meses_cortos.get(mes_txt, 0)
+                if mes_num > 0:
+                    diff = abs((hoy.month - mes_num) * 31 + (hoy.day - dia_num))
+                    if diff < mejor_diff:
+                        mejor_diff = diff
+                        mejor_dia = num_dia
+            except: pass
+
+    if mejor_dia:
+        return mejor_dia
+
+    # Fallback: último día disponible
+    buttons = soup.find_all("a", href=re.compile(r'/screen/resultsbyday/'))
+    if buttons:
+        last = buttons[-1].get("href", "")
+        m = re.search(r'/(\d+)\?', last)
         if m: return int(m.group(1))
+
     return None
 
 def parsear_widget(html):
