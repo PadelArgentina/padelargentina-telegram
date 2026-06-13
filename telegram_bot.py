@@ -7,7 +7,7 @@ import pytz
 from bs4 import BeautifulSoup
 from datetime import datetime, timedelta
 
-TELEGRAM_TOKEN   = os.environ.get("TELEGRAM_TOKEN")h
+TELEGRAM_TOKEN   = os.environ.get("TELEGRAM_TOKEN")
 TELEGRAM_CHAT_ID = os.environ.get("TELEGRAM_CHAT_ID")
 ARGENTINA_TZ     = pytz.timezone("America/Argentina/Buenos_Aires")
 INTERVALO_MIN    = 5
