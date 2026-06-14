@@ -36,6 +36,11 @@ RONDAS_ES = {
     "qualifying":"QUALY","qualification":"QUALY",
 }
 
+MESES_WIDGET = {
+    "JAN":1,"FEB":2,"MAR":3,"APR":4,"MAY":5,"JUN":6,
+    "JUL":7,"AUG":8,"SEP":9,"OCT":10,"NOV":11,"DEC":12
+}
+
 def hora_arg():
     return datetime.now(ARGENTINA_TZ)
 
@@ -107,33 +112,29 @@ def tg_enviar_pdf(pdf_bytes, nombre, caption):
 
 def dia_actual_widget(torneo):
     """
-    Lee el selector de días del widget y encuentra el día correspondiente a HOY.
-    Compara la fecha de cada botón con la fecha actual argentina.
-    Si no hay coincidencia exacta, usa el último día disponible.
+    Lee el widget día 1 para obtener el selector de días.
+    Compara cada fecha del selector con la fecha de HOY en Argentina.
+    Devuelve el número de día que corresponde a hoy.
     """
     url = f"https://widget.matchscorerlive.com/screen/resultsbyday/FIP-{torneo['year']}-{torneo['id']}/1?t=tol"
     html = leer_url(url)
     if not html: return None
     soup = BeautifulSoup(html, "html.parser")
-
     hoy = hora_arg()
-    meses_cortos = {
-        "JAN":1,"FEB":2,"MAR":3,"APR":4,"MAY":5,"JUN":6,
-        "JUL":7,"AUG":8,"SEP":9,"OCT":10,"NOV":11,"DEC":12
-    }
 
-    # Primero buscar botón active
+    # Primero buscar botón con clase "active"
     active = soup.find("div", class_="play-day-button active")
     if active:
         parent = active.find_parent("a")
         if parent:
-            href = parent.get("href", "")
-            m = re.search(r'/(\d+)\?', href)
-            if m: return int(m.group(1))
+            m = re.search(r'/(\d+)\?', parent.get("href", ""))
+            if m:
+                print(f"   📅 día {m.group(1)} (active)")
+                return int(m.group(1))
 
-    # Si no hay active, buscar el botón que coincide con la fecha de hoy
+    # Si no hay active, buscar el día cuya fecha coincide con hoy
     mejor_dia = None
-    mejor_diff = 999
+    menor_diff = 999
     for a in soup.find_all("a", href=True):
         href = a.get("href", "")
         m = re.search(r'/(\d+)\?', href)
@@ -141,38 +142,34 @@ def dia_actual_widget(torneo):
         num_dia = int(m.group(1))
         btn = a.find("div", class_="play-day-button")
         if not btn: continue
-        fecha_txt = btn.get_text(" ", strip=True)  # ej: "JUN 14 SUN"
+        # Leer fecha del botón: "JUN 14" está en span.play-day-date
+        fecha_span = btn.find("span", class_="play-day-date")
+        if not fecha_span: continue
+        fecha_txt = fecha_span.get_text(strip=True)  # ej: "JUN 14"
         partes = fecha_txt.split()
         if len(partes) >= 2:
             try:
-                mes_txt = partes[0].upper()[:3]
+                mes_num = MESES_WIDGET.get(partes[0].upper()[:3], 0)
                 dia_num = int(partes[1])
-                mes_num = meses_cortos.get(mes_txt, 0)
                 if mes_num > 0:
                     diff = abs((hoy.month - mes_num) * 31 + (hoy.day - dia_num))
-                    if diff < mejor_diff:
-                        mejor_diff = diff
+                    if diff < menor_diff:
+                        menor_diff = diff
                         mejor_dia = num_dia
             except: pass
 
     if mejor_dia:
+        print(f"   📅 día {mejor_dia} (por fecha, diff={menor_diff})")
         return mejor_dia
-
-    # Fallback: último día disponible
-    buttons = soup.find_all("a", href=re.compile(r'/screen/resultsbyday/'))
-    if buttons:
-        last = buttons[-1].get("href", "")
-        m = re.search(r'/(\d+)\?', last)
-        if m: return int(m.group(1))
 
     return None
 
 def parsear_widget(html):
     """
-    Parser definitivo basado en el HTML real de matchscorerlive.
-    Ganador: el equipo que tiene clase 'winner' en div.ml-2
-    Marcador: sets sin 'set-lost' del ganador vs sets sin 'set-lost' del perdedor
-    Solo partidos COMPLETED.
+    Parser basado en HTML real de matchscorerlive.
+    Ganador: clase 'winner' en div.ml-2
+    Marcador: TODOS los sets de cada equipo en orden, set_gan[i]-set_per[i]
+    Solo COMPLETED.
     """
     soup = BeautifulSoup(html, "html.parser")
     partidos = []
@@ -181,32 +178,24 @@ def parsear_widget(html):
         rows = tabla.find_all("tr", recursive=False)
         if len(rows) < 3: continue
 
-        # Ronda del header
+        # Ronda
         ronda = ""
-        header = rows[0]
-        ronda_div = header.find("div", class_="round-name")
+        ronda_div = rows[0].find("div", class_="round-name")
         if ronda_div:
-            # Buscar el div interno que tiene el nombre de la ronda (no Men/Women)
-            divs = ronda_div.find_all("div")
-            for div in divs:
+            for div in ronda_div.find_all("div"):
                 t = div.get_text(strip=True)
                 if t and t not in ("Men", "Women"):
                     ronda = t; break
 
-        # Estado: solo COMPLETED
+        # Solo COMPLETED
         summary = next((tr for tr in rows if "summary" in tr.get("class", [])), None)
-        if not summary: continue
-        if "completed" not in summary.get_text().lower(): continue
+        if not summary or "completed" not in summary.get_text().lower(): continue
 
         # Filas de equipos
         team_rows = [tr for tr in rows if tr.find("div", class_="player-names")]
         if len(team_rows) < 2: continue
 
         def leer_equipo(tr):
-            """
-            Lee jugadores y detecta si el equipo es ganador.
-            Ganador: tiene clase 'winner' en div.ml-2
-            """
             jugadores = []
             es_ganador = False
             double = tr.find("div", class_="double")
@@ -227,51 +216,33 @@ def parsear_widget(html):
                     jugadores.append({"nombre": nombre, "es_arg": es_arg})
             return jugadores, es_ganador
 
-        def sets_ganados(tr):
-            """Sets que ganó este equipo: td.set sin set-lost, con número."""
-            resultado = []
-            for td in tr.find_all("td", class_="set"):
-                clases = td.get("class", [])
-                t = td.get_text(strip=True)
-                if t and t != "-" and "set-lost" not in clases:
-                    resultado.append(t)
-            return resultado
-
-        def sets_perdidos(tr):
-            """Sets que perdió este equipo: td.set con set-lost, con número."""
-            resultado = []
-            for td in tr.find_all("td", class_="set"):
-                clases = td.get("class", [])
-                t = td.get_text(strip=True)
-                if t and t != "-" and "set-lost" in clases:
-                    resultado.append(t)
-            return resultado
+        def todos_sets(tr):
+            """Todos los sets en orden (incluye ganados y perdidos)."""
+            return [td.get_text(strip=True)
+                    for td in tr.find_all("td", class_="set")
+                    if td.get_text(strip=True) not in ("", "-")]
 
         eq1, gan1 = leer_equipo(team_rows[0])
         eq2, gan2 = leer_equipo(team_rows[1])
-
         if len(eq1) < 2 or len(eq2) < 2: continue
+
         hay_arg = any(j["es_arg"] for j in eq1 + eq2)
         if not hay_arg: continue
 
-        # Ganador es el que tiene 'winner'
-        if gan1:
-            gan, per = eq1, eq2
-            tr_gan, tr_per = team_rows[0], team_rows[1]
-        elif gan2:
-            gan, per = eq2, eq1
-            tr_gan, tr_per = team_rows[1], team_rows[0]
-        else:
-            continue  # No se puede determinar ganador
+        if not gan1 and not gan2: continue  # no se puede determinar ganador
 
-        # Marcador: sets ganados por el ganador vs sets perdidos por el ganador
-        s_gan = sets_ganados(tr_gan)  # sets que ganó el ganador
-        s_per = sets_perdidos(tr_gan)  # sets que perdió el ganador (= sets que ganó el perdedor)
+        gan = eq1 if gan1 else eq2
+        per = eq2 if gan1 else eq1
+        tr_gan = team_rows[0] if gan1 else team_rows[1]
+        tr_per = team_rows[1] if gan1 else team_rows[0]
+
+        sets_gan = todos_sets(tr_gan)
+        sets_per = todos_sets(tr_per)
 
         sets_txt = []
-        for i in range(max(len(s_gan), len(s_per))):
-            g = s_gan[i] if i < len(s_gan) else "?"
-            p = s_per[i] if i < len(s_per) else "?"
+        for i in range(max(len(sets_gan), len(sets_per))):
+            g = sets_gan[i] if i < len(sets_gan) else "?"
+            p = sets_per[i] if i < len(sets_per) else "?"
             sets_txt.append(f"{g}-{p}")
         marcador = " / ".join(sets_txt)
 
@@ -297,25 +268,24 @@ def tarea_orden_dia():
     if not pdf_bytes: return
     dia_en = DIAS_EN[manana.weekday()].capitalize()
     nombre = f"orden-de-juego-{manana.day}-{MESES_EN[manana.month].lower()}.pdf"
-    caption = (f"🗓️ <b>ORDEN DE JUEGO — {dia_en} {manana.strftime('%d/%m/%Y')}</b>\n"
-               f"🏟️ <b>PREMIER PADEL P1 VALENCIA</b> 🇪🇸\n\n"
-               f"📋 Todos los partidos, horarios y pistas.\n\n{LINK_WEB}")
+    caption = (
+        f"🗓️ <b>ORDEN DE JUEGO — {dia_en} {manana.strftime('%d/%m/%Y')}</b>\n"
+        f"🏟️ <b>PREMIER PADEL P1 VALENCIA</b> 🇪🇸\n\n"
+        f"📋 Todos los partidos, horarios y pistas.\n\n"
+        f"{LINK_WEB}"
+    )
     if tg_enviar_pdf(pdf_bytes, nombre, caption):
         marcar_hoy(tid)
         print("✅ PDF enviado")
 
 def monitorear():
     pub = cargar_pub()
-
     for torneo in TORNEOS:
         print(f"📂 {torneo['nombre']}")
-
-        # Obtener día actual del widget
         dia = dia_actual_widget(torneo)
         if not dia:
-            print(f"   ⚠️ No se pudo determinar el día actual")
+            print(f"   ⚠️ No se pudo determinar el día")
             continue
-        print(f"   📅 día {dia}")
 
         url = (f"https://widget.matchscorerlive.com/screen/resultsbyday"
                f"/FIP-{torneo['year']}-{torneo['id']}/{dia}?t=tol")
@@ -363,13 +333,13 @@ def monitorear():
 
 def ciclo():
     print("="*50)
-    print("🤖 BOT TELEGRAM PADEL ARGENTINA — v19")
+    print("🤖 BOT TELEGRAM PADEL ARGENTINA — v20")
     print(f"📅 {hora_arg().strftime('%d/%m/%Y %H:%M')}")
     print("="*50)
     tg_enviar(
-        "🤖 <b>Bot Padel Argentina v19 ✅</b>\n\n"
-        "📡 matchscorerlive | ganador por clase 'winner'\n"
-        "🎾 Solo día actual | marcador correcto\n"
+        "🤖 <b>Bot Padel Argentina v20 ✅</b>\n\n"
+        "📡 matchscorerlive | marcador correcto\n"
+        "🎾 Solo día actual por fecha\n"
         "🇦🇷 Valencia · Eslovenia · Palermo · Shanghai · Lanzarote\n\n"
         f"{LINK_WEB}"
     )
