@@ -21,11 +21,8 @@ MESES_EN = {1:"JANUARY",2:"FEBRUARY",3:"MARCH",4:"APRIL",5:"MAY",6:"JUNE",
             7:"JULY",8:"AUGUST",9:"SEPTEMBER",10:"OCTOBER",11:"NOVEMBER",12:"DECEMBER"}
 
 TORNEOS = [
-    {"nombre":"PREMIER PADEL P1 VALENCIA", "ciudad":"Valencia",  "bandera":"🇪🇸", "cat":"PREMIER PADEL P1", "id":"2403", "year":"2026"},
-    {"nombre":"FIP BRONZE ESLOVENIA",       "ciudad":"Eslovenia", "bandera":"🇸🇮", "cat":"FIP BRONZE",       "id":"2404", "year":"2026"},
-    {"nombre":"FIP SILVER PALERMO",         "ciudad":"Palermo",   "bandera":"🇮🇹", "cat":"FIP SILVER",       "id":"2606", "year":"2026"},
-    {"nombre":"FIP GOLD SHANGHAI",          "ciudad":"Shanghai",  "bandera":"🇨🇳", "cat":"FIP GOLD",         "id":"2412", "year":"2026"},
-    {"nombre":"FIP BRONZE LANZAROTE",       "ciudad":"Lanzarote", "bandera":"🇪🇸", "cat":"FIP BRONZE",       "id":"2411", "year":"2026"},
+    {"nombre":"FIP BRONZE OSAKA",           "ciudad":"Osaka",    "bandera":"🇯🇵", "cat":"FIP BRONZE",       "id":"2501", "year":"2026"},
+    {"nombre":"FIP PLATINUM PORTUGAL",      "ciudad":"Portugal", "bandera":"🇵🇹", "cat":"FIP PLATINUM",     "id":"4201", "year":"2026"},
 ]
 
 RONDAS_ES = {
@@ -340,7 +337,7 @@ def ciclo():
         "🤖 <b>Bot Padel Argentina v20 ✅</b>\n\n"
         "📡 matchscorerlive | marcador correcto\n"
         "🎾 Solo día actual por fecha\n"
-        "🇦🇷 Valencia · Eslovenia · Palermo · Shanghai · Lanzarote\n\n"
+        "🇦🇷 Osaka · Portugal\n\n"
         f"{LINK_WEB}"
     )
     contador = 0
