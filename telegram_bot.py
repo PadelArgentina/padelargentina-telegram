@@ -15,17 +15,19 @@ ARCHIVO_PUB      = "tg_pub.json"
 ARCHIVO_ESTADO   = "tg_estado.json"
 LINK_WEB         = "🌐 www.padelargentina.com.ar"
 
-DIAS_EN  = {0:"MONDAY",1:"TUESDAY",2:"WEDNESDAY",3:"THURSDAY",
-            4:"FRIDAY",5:"SATURDAY",6:"SUNDAY"}
-MESES_EN = {1:"JANUARY",2:"FEBRUARY",3:"MARCH",4:"APRIL",5:"MAY",6:"JUNE",
-            7:"JULY",8:"AUGUST",9:"SEPTEMBER",10:"OCTOBER",11:"NOVEMBER",12:"DECEMBER"}
-
+# ══════════════════════════════════════════════
+#  TORNEOS ACTIVOS — actualizar cada semana
+#  Cómo obtener el id: pedirle a Claude in Chrome
+#  que entre a cada página, F12 → Network →
+#  pestaña "Orden de juego" → filtrar por "screen"
+#  La URL tiene: widget.matchscorerlive.com/screen/.../FIP-2026-XXXX/
+# ══════════════════════════════════════════════
 TORNEOS = [
-    {"nombre":"FIP BRONZE OSAKA",           "ciudad":"Osaka",      "bandera":"🇯🇵", "cat":"FIP BRONZE",   "id":"2501", "year":"2026"},
-    {"nombre":"FIP PLATINUM PORTUGAL",      "ciudad":"Portugal",   "bandera":"🇵🇹", "cat":"FIP PLATINUM", "id":"4201", "year":"2026"},
-    {"nombre":"FIP SILVER NARBONA",         "ciudad":"Narbona",    "bandera":"🇫🇷", "cat":"FIP SILVER",   "id":"2806", "year":"2026"},
-    {"nombre":"FIP BRONZE CORDENONS",       "ciudad":"Cordenons",  "bandera":"🇮🇹", "cat":"FIP BRONZE",   "id":"2402", "year":"2026"},
-    {"nombre":"FIP BRONZE MARRUECOS",       "ciudad":"Marruecos",  "bandera":"🇲🇦", "cat":"FIP BRONZE",   "id":"2506", "year":"2026"},
+    {"nombre":"VALLADOLID P2",         "ciudad":"Valladolid", "bandera":"🇪🇸", "cat":"PREMIER PADEL P2", "id":"3801", "year":"2026"},
+    {"nombre":"FIP GOLD ABIDJAN",      "ciudad":"Abidjan",    "bandera":"🇨🇮", "cat":"FIP GOLD",         "id":"3411", "year":"2026"},
+    {"nombre":"FIP SILVER GIULIANOVA", "ciudad":"Giulianova", "bandera":"🇮🇹", "cat":"FIP SILVER",       "id":"2604", "year":"2026"},
+    {"nombre":"FIP BRONZE ASTORGA",    "ciudad":"Astorga",    "bandera":"🇪🇸", "cat":"FIP BRONZE",       "id":"2602", "year":"2026"},
+    {"nombre":"FIP BRONZE SELANGOR",   "ciudad":"Selangor",   "bandera":"🇲🇾", "cat":"FIP BRONZE",       "id":"2609", "year":"2026"},
 ]
 
 RONDAS_ES = {
@@ -60,14 +62,6 @@ def guardar_pub(pid):
     ids = set(d.get("ids", [])); ids.add(pid)
     guardar_json(ARCHIVO_PUB, {"ids": list(ids)})
 
-def ya_hoy(t):
-    return cargar_json(ARCHIVO_ESTADO).get(t) == hora_arg().strftime("%Y-%m-%d")
-
-def marcar_hoy(t):
-    e = cargar_json(ARCHIVO_ESTADO)
-    e[t] = hora_arg().strftime("%Y-%m-%d")
-    guardar_json(ARCHIVO_ESTADO, e)
-
 def ronda_es(r):
     t = r.lower().strip()
     for k, v in RONDAS_ES.items():
@@ -101,15 +95,6 @@ def tg_enviar(texto):
     except Exception as e:
         print(f"❌ TG: {e}"); return False
 
-def tg_enviar_pdf(pdf_bytes, nombre, caption):
-    try:
-        r = requests.post(
-            f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendDocument",
-            data={"chat_id":TELEGRAM_CHAT_ID,"caption":caption,"parse_mode":"HTML"},
-            files={"document":(nombre,pdf_bytes,"application/pdf")},timeout=40)
-        return r.status_code == 200
-    except: return False
-
 def dia_actual_widget(torneo):
     """
     Lee el widget día 1 para obtener el selector de días.
@@ -122,7 +107,6 @@ def dia_actual_widget(torneo):
     soup = BeautifulSoup(html, "html.parser")
     hoy = hora_arg()
 
-    # Primero buscar botón con clase "active"
     active = soup.find("div", class_="play-day-button active")
     if active:
         parent = active.find_parent("a")
@@ -132,7 +116,6 @@ def dia_actual_widget(torneo):
                 print(f"   📅 día {m.group(1)} (active)")
                 return int(m.group(1))
 
-    # Si no hay active, buscar el día cuya fecha coincide con hoy
     mejor_dia = None
     menor_diff = 999
     for a in soup.find_all("a", href=True):
@@ -142,10 +125,9 @@ def dia_actual_widget(torneo):
         num_dia = int(m.group(1))
         btn = a.find("div", class_="play-day-button")
         if not btn: continue
-        # Leer fecha del botón: "JUN 14" está en span.play-day-date
         fecha_span = btn.find("span", class_="play-day-date")
         if not fecha_span: continue
-        fecha_txt = fecha_span.get_text(strip=True)  # ej: "JUN 14"
+        fecha_txt = fecha_span.get_text(strip=True)
         partes = fecha_txt.split()
         if len(partes) >= 2:
             try:
@@ -178,7 +160,6 @@ def parsear_widget(html):
         rows = tabla.find_all("tr", recursive=False)
         if len(rows) < 3: continue
 
-        # Ronda
         ronda = ""
         ronda_div = rows[0].find("div", class_="round-name")
         if ronda_div:
@@ -187,11 +168,9 @@ def parsear_widget(html):
                 if t and t not in ("Men", "Women"):
                     ronda = t; break
 
-        # Solo COMPLETED
         summary = next((tr for tr in rows if "summary" in tr.get("class", [])), None)
         if not summary or "completed" not in summary.get_text().lower(): continue
 
-        # Filas de equipos
         team_rows = [tr for tr in rows if tr.find("div", class_="player-names")]
         if len(team_rows) < 2: continue
 
@@ -217,7 +196,6 @@ def parsear_widget(html):
             return jugadores, es_ganador
 
         def todos_sets(tr):
-            """Todos los sets en orden (incluye ganados y perdidos)."""
             return [td.get_text(strip=True)
                     for td in tr.find_all("td", class_="set")
                     if td.get_text(strip=True) not in ("", "-")]
@@ -228,8 +206,7 @@ def parsear_widget(html):
 
         hay_arg = any(j["es_arg"] for j in eq1 + eq2)
         if not hay_arg: continue
-
-        if not gan1 and not gan2: continue  # no se puede determinar ganador
+        if not gan1 and not gan2: continue
 
         gan = eq1 if gan1 else eq2
         per = eq2 if gan1 else eq1
@@ -254,29 +231,6 @@ def parsear_widget(html):
         })
 
     return partidos
-
-def url_pdf(fecha):
-    return (f"https://www.padelfip.com/wp-content/uploads/2025/12/"
-            f"ORDER-OF-PLAY-{DIAS_EN[fecha.weekday()]}-{fecha.day}"
-            f"-{MESES_EN[fecha.month]}-{fecha.year}-2.pdf")
-
-def tarea_orden_dia():
-    tid = "orden_dia_valencia"
-    if ya_hoy(tid): return
-    manana = (hora_arg() + timedelta(days=1)).date()
-    pdf_bytes = leer_url(url_pdf(manana), espera_pdf=True)
-    if not pdf_bytes: return
-    dia_en = DIAS_EN[manana.weekday()].capitalize()
-    nombre = f"orden-de-juego-{manana.day}-{MESES_EN[manana.month].lower()}.pdf"
-    caption = (
-        f"🗓️ <b>ORDEN DE JUEGO — {dia_en} {manana.strftime('%d/%m/%Y')}</b>\n"
-        f"🏟️ <b>PREMIER PADEL P1 VALENCIA</b> 🇪🇸\n\n"
-        f"📋 Todos los partidos, horarios y pistas.\n\n"
-        f"{LINK_WEB}"
-    )
-    if tg_enviar_pdf(pdf_bytes, nombre, caption):
-        marcar_hoy(tid)
-        print("✅ PDF enviado")
 
 def monitorear():
     pub = cargar_pub()
@@ -333,21 +287,20 @@ def monitorear():
 
 def ciclo():
     print("="*50)
-    print("🤖 BOT TELEGRAM PADEL ARGENTINA — v20")
+    print("🤖 BOT TELEGRAM PADEL ARGENTINA — v23")
     print(f"📅 {hora_arg().strftime('%d/%m/%Y %H:%M')}")
     print("="*50)
     tg_enviar(
-        "🤖 <b>Bot Padel Argentina v20 ✅</b>\n\n"
+        "🤖 <b>Bot Padel Argentina v23 ✅</b>\n\n"
         "📡 matchscorerlive | marcador correcto\n"
         "🎾 Solo día actual por fecha\n"
-        "🇦🇷 Osaka · Portugal · Narbona · Cordenons · Marruecos\n\n"
+        "🇦🇷 Valladolid · Abidjan · Giulianova · Astorga · Selangor\n\n"
         f"{LINK_WEB}"
     )
     contador = 0
     while True:
         print(f"\n🔍 [{hora_arg().strftime('%H:%M:%S')}] Ciclo {contador+1}")
         try:
-            tarea_orden_dia()
             monitorear()
         except Exception as e:
             print(f"⚠️ Error: {e}")
