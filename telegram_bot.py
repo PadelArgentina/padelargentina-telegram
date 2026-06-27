@@ -28,6 +28,7 @@ TORNEOS = [
     {"nombre":"FIP SILVER GIULIANOVA", "ciudad":"Giulianova", "bandera":"🇮🇹", "cat":"FIP SILVER",       "id":"2604", "year":"2026"},
     {"nombre":"FIP BRONZE ASTORGA",    "ciudad":"Astorga",    "bandera":"🇪🇸", "cat":"FIP BRONZE",       "id":"2602", "year":"2026"},
     {"nombre":"FIP BRONZE SELANGOR",   "ciudad":"Selangor",   "bandera":"🇲🇾", "cat":"FIP BRONZE",       "id":"2609", "year":"2026"},
+    {"nombre":"FIP BRONZE IQUIQUE",    "ciudad":"Iquique",    "bandera":"🇨🇱", "cat":"FIP BRONZE",       "id":"801",  "year":"2026"},
 ]
 
 RONDAS_ES = {
@@ -294,7 +295,7 @@ def ciclo():
         "🤖 <b>Bot Padel Argentina v23 ✅</b>\n\n"
         "📡 matchscorerlive | marcador correcto\n"
         "🎾 Solo día actual por fecha\n"
-        "🇦🇷 Valladolid · Abidjan · Giulianova · Astorga · Selangor\n\n"
+        "🇦🇷 Valladolid · Abidjan · Giulianova · Astorga · Selangor · Iquique\n\n"
         f"{LINK_WEB}"
     )
     contador = 0
