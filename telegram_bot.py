@@ -17,18 +17,9 @@ LINK_WEB         = "🌐 www.padelargentina.com.ar"
 
 # ══════════════════════════════════════════════
 #  TORNEOS ACTIVOS — actualizar cada semana
-#  Cómo obtener el id: pedirle a Claude in Chrome
-#  que entre a cada página, F12 → Network →
-#  pestaña "Orden de juego" → filtrar por "screen"
-#  La URL tiene: widget.matchscorerlive.com/screen/.../FIP-2026-XXXX/
 # ══════════════════════════════════════════════
 TORNEOS = [
-    {"nombre":"VALLADOLID P2",         "ciudad":"Valladolid", "bandera":"🇪🇸", "cat":"PREMIER PADEL P2", "id":"3801", "year":"2026"},
-    {"nombre":"FIP GOLD ABIDJAN",      "ciudad":"Abidjan",    "bandera":"🇨🇮", "cat":"FIP GOLD",         "id":"3411", "year":"2026"},
-    {"nombre":"FIP SILVER GIULIANOVA", "ciudad":"Giulianova", "bandera":"🇮🇹", "cat":"FIP SILVER",       "id":"2604", "year":"2026"},
-    {"nombre":"FIP BRONZE ASTORGA",    "ciudad":"Astorga",    "bandera":"🇪🇸", "cat":"FIP BRONZE",       "id":"2602", "year":"2026"},
-    {"nombre":"FIP BRONZE SELANGOR",   "ciudad":"Selangor",   "bandera":"🇲🇾", "cat":"FIP BRONZE",       "id":"2609", "year":"2026"},
-    {"nombre":"FIP BRONZE IQUIQUE",    "ciudad":"Iquique",    "bandera":"🇨🇱", "cat":"FIP BRONZE",       "id":"801",  "year":"2026"},
+    {"nombre":"BORDEAUX P2", "ciudad":"Bordeaux", "bandera":"🇫🇷", "cat":"PREMIER PADEL P2", "id":"2401", "year":"2026"},
 ]
 
 RONDAS_ES = {
@@ -97,11 +88,6 @@ def tg_enviar(texto):
         print(f"❌ TG: {e}"); return False
 
 def dia_actual_widget(torneo):
-    """
-    Lee el widget día 1 para obtener el selector de días.
-    Compara cada fecha del selector con la fecha de HOY en Argentina.
-    Devuelve el número de día que corresponde a hoy.
-    """
     url = f"https://widget.matchscorerlive.com/screen/resultsbyday/FIP-{torneo['year']}-{torneo['id']}/1?t=tol"
     html = leer_url(url)
     if not html: return None
@@ -144,16 +130,9 @@ def dia_actual_widget(torneo):
     if mejor_dia:
         print(f"   📅 día {mejor_dia} (por fecha, diff={menor_diff})")
         return mejor_dia
-
     return None
 
 def parsear_widget(html):
-    """
-    Parser basado en HTML real de matchscorerlive.
-    Ganador: clase 'winner' en div.ml-2
-    Marcador: TODOS los sets de cada equipo en orden, set_gan[i]-set_per[i]
-    Solo COMPLETED.
-    """
     soup = BeautifulSoup(html, "html.parser")
     partidos = []
 
@@ -288,14 +267,13 @@ def monitorear():
 
 def ciclo():
     print("="*50)
-    print("🤖 BOT TELEGRAM PADEL ARGENTINA — v23")
+    print("🤖 BOT TELEGRAM PADEL ARGENTINA — v25")
     print(f"📅 {hora_arg().strftime('%d/%m/%Y %H:%M')}")
     print("="*50)
     tg_enviar(
-        "🤖 <b>Bot Padel Argentina v23 ✅</b>\n\n"
+        "🤖 <b>Bot Padel Argentina v25 ✅</b>\n\n"
         "📡 matchscorerlive | marcador correcto\n"
-        "🎾 Solo día actual por fecha\n"
-        "🇦🇷 Valladolid · Abidjan · Giulianova · Astorga · Selangor · Iquique\n\n"
+        "🇦🇷 Bordeaux P2\n\n"
         f"{LINK_WEB}"
     )
     contador = 0
