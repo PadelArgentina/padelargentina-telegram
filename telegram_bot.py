@@ -16,8 +16,12 @@ ARCHIVO_ESTADO   = "tg_estado.json"
 LINK_WEB         = "🌐 www.padelargentina.com.ar"
 
 TORNEOS = [
-    {"nombre":"FIP BRONZE ALICANTE", "ciudad":"Alicante", "bandera":"🇪🇸", "cat":"FIP BRONZE", "id":"3008", "year":"2026"},
-    {"nombre":"FIP SILVER OPORTO",   "ciudad":"Oporto",   "bandera":"🇵🇹", "cat":"FIP SILVER", "id":"2905", "year":"2026"},
+    {"nombre":"FIP SILVER OPORTO",        "ciudad":"Oporto",       "bandera":"🇵🇹", "cat":"FIP SILVER", "id":"2905", "year":"2026"},
+    {"nombre":"FIP BRONZE COPIAPO",        "ciudad":"Copiapó",      "bandera":"🇨🇱", "cat":"FIP BRONZE", "id":"2803", "year":"2026"},
+    {"nombre":"FIP BRONZE CAMBORIU",       "ciudad":"Camboriú",     "bandera":"🇧🇷", "cat":"FIP BRONZE", "id":"3002", "year":"2026"},
+    {"nombre":"FIP BRONZE ALICANTE",       "ciudad":"Alicante",     "bandera":"🇪🇸", "cat":"FIP BRONZE", "id":"3008", "year":"2026"},
+    {"nombre":"FIP BRONZE ROVATO",         "ciudad":"Rovato",       "bandera":"🇮🇹", "cat":"FIP BRONZE", "id":"3009", "year":"2026"},
+    {"nombre":"FIP BRONZE ALLESVOORPADEL", "ciudad":"Países Bajos", "bandera":"🇳🇱", "cat":"FIP BRONZE", "id":"3010", "year":"2026"},
 ]
 
 RONDAS_ES = {
@@ -265,13 +269,13 @@ def monitorear():
 
 def ciclo():
     print("="*50)
-    print("🤖 BOT TELEGRAM PADEL ARGENTINA — v28")
+    print("🤖 BOT TELEGRAM PADEL ARGENTINA — v29")
     print(f"📅 {hora_arg().strftime('%d/%m/%Y %H:%M')}")
     print("="*50)
     tg_enviar(
-        "🤖 <b>Bot Padel Argentina v28 ✅</b>\n\n"
+        "🤖 <b>Bot Padel Argentina v29 ✅</b>\n\n"
         "📡 matchscorerlive | marcador correcto\n"
-        "🇦🇷 Alicante · Oporto\n\n"
+        "🇦🇷 Oporto · Copiapó · Camboriú · Alicante · Rovato · Países Bajos\n\n"
         f"{LINK_WEB}"
     )
     contador = 0
